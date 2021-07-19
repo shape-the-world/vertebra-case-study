@@ -1,19 +1,23 @@
 package pipeline
 
 import com.typesafe.scalalogging.StrictLogging
-import data.DataProvider.{CaseId, Stage, Vertebra}
 import data.DataProvider
 import data.DataProvider.Vertebra.VertebraL1
+import data.DataProvider.{CaseId, Stage, Vertebra}
 import scalismo.geometry._3D
 import scalismo.image.DiscreteImage
 import scalismo.io.MeshIO
 import scalismo.mesh.TriangleMesh
-import scalismo.ui.api.ScalismoUIHeadless
 import scalismo.utils.{ImageConversion, MeshConversion}
 import vtk.{vtkMarchingCubes, vtkQuadricDecimation, vtkWindowedSincPolyDataFilter}
 
 import scala.util.{Failure, Success, Try}
 
+/**
+ * Pipeline step which extracts triangle meshes from the label maps.
+ * This is usually the first step in the pipeline and is the basis for later
+ * landmarking.
+ */
 object ExtractMeshFromLabelmap extends StrictLogging {
 
   def extractTriangleMesh(labelMap: DiscreteImage[_3D, Short], vertebra: Vertebra): Try[TriangleMesh[_3D]] = {

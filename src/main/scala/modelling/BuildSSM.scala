@@ -9,11 +9,12 @@ import scalismo.statisticalmodel.PointDistributionModel
 import scalismo.statisticalmodel.dataset.DataCollection
 import scalismo.ui.api.ScalismoUI
 
-import scala.util.{Failure, Success}
-
+/**
+ * Builds a statistical shape model.
+ */
 object BuildSSM extends StrictLogging {
 
-  def main(args : Array[String]) : Unit = {
+  def main(args: Array[String]): Unit = {
 
     scalismo.initialize()
 
@@ -23,14 +24,12 @@ object BuildSSM extends StrictLogging {
 
     dataProvider.ssmDir.mkdirs()
 
-    val refMesh = dataProvider.referenceMesh.get
+    val refMesh = dataProvider.referenceTriangleMesh.get
     val (successes, failures) = dataProvider.caseIds
       .map(caseId => dataProvider.triangleMesh(Stage.Registered, caseId))
       .partition(_.isSuccess)
 
-    failures.map(failure =>
-      failure.fold(fa => logger.error(fa.getMessage), _ => ())
-    )
+    failures.map(failure => failure.fold(fa => logger.error(fa.getMessage), _ => ()))
 
     val meshes = successes.map(_.get)
     val dataCollection = DataCollection.fromTriangleMesh3DSequence(refMesh, meshes)

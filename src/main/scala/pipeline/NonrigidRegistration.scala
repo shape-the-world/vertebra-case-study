@@ -5,10 +5,10 @@ import com.typesafe.scalalogging.StrictLogging
 import data.DataProvider
 import data.DataProvider.Stage
 import data.DataProvider.Vertebra.VertebraL1
-import scalismo.common.interpolation.TriangleMeshInterpolator3D
+import scalismo.common.interpolation.{BarycentricInterpolator3D, TriangleMeshInterpolator3D}
 import scalismo.geometry.{EuclideanVector, Landmark, _3D}
 import scalismo.io.MeshIO
-import scalismo.mesh.{MeshOperations, TriangleMesh, TriangleMesh3D}
+import scalismo.mesh.{MeshOperations, TetrahedralMesh, TriangleMesh, TriangleMesh3D}
 import scalismo.numerics.{FixedPointsUniformMeshSampler3D, LBFGSOptimizer}
 import scalismo.registration.{GaussianProcessTransformationSpace, L2Regularizer, MeanSquaresMetric, Registration}
 import scalismo.statisticalmodel.{LowRankGaussianProcess, PointDistributionModel}
@@ -17,6 +17,13 @@ import scalismo.utils.Random
 
 import scala.util.{Failure, Success, Try}
 
+/**
+ * Pipeline step, which establishes correspondence between the reference and
+ * the aligned meshes. It requires that a Gaussian process model, defined on a tetrahedral
+ * reference is available.
+ * While the model that is used for performing the registration is a tetrahedral model,
+ * the registration is only performed using its outer surface.
+ */
 object NonrigidRegistration extends StrictLogging {
 
   case class RegistrationParameters(regularizationWeight: Double, numberOfIterations: Int, numberOfSampledPoints: Int)
@@ -68,7 +75,7 @@ object NonrigidRegistration extends StrictLogging {
 
   }
 
-  def registerCase(pdmGp: PointDistributionModel[_3D, TriangleMesh],
+  def registerCase(pdmGp: PointDistributionModel[_3D, TetrahedralMesh],
                    referenceLandmarks: Seq[Landmark[_3D]],
                    dataProvider: DataProvider,
                    caseId: DataProvider.CaseId)(implicit rng: scalismo.utils.Random): Try[Unit] = {
@@ -82,7 +89,10 @@ object NonrigidRegistration extends StrictLogging {
       val refIds = referenceLandmarks.map(lm => pdmGp.reference.pointSet.findClosestPoint(lm.point).id)
       val posteriorPDM = pdmGp.posterior(refIds.zip(targetLandmarks.map(_.point)).toIndexedSeq, sigma2 = 25.0)
 
-      val pdmView = ui.show(modelGroup, posteriorPDM, "gp")
+      // for the registration we restrict the pdm to the outer surface
+      val pdmGPOuterSurface = posteriorPDM.newReference(pdmGp.reference.operations.getOuterSurface, BarycentricInterpolator3D())
+
+      val pdmView = ui.show(modelGroup, pdmGPOuterSurface, "gp")
       val gpView: ShapeModelTransformationView = pdmView.shapeModelTransformationView
 
 
@@ -97,19 +107,23 @@ object NonrigidRegistration extends StrictLogging {
       val initialCoefficients = DenseVector.zeros[Double](pdmGp.rank)
 
       val finalCoefficients = registrationParameters.foldLeft(initialCoefficients)((modelCoefficients, regParameters) =>
-        doRegistration(posteriorPDM.gp.interpolate(TriangleMeshInterpolator3D()),
-          posteriorPDM.reference,
+        doRegistration(pdmGPOuterSurface.gp.interpolate(TriangleMeshInterpolator3D()),
+          pdmGPOuterSurface.reference,
                        targetMesh,
                        regParameters,
                        modelCoefficients,
                        gpView)
       )
 
-      val registeredMesh = posteriorPDM.instance(finalCoefficients)
+      val registeredTriangleMesh = pdmGPOuterSurface.instance(finalCoefficients)
+      val registeredTetrahedralMesh = posteriorPDM.instance(finalCoefficients)
 
-      val outputFile = dataProvider.triangleMeshFile(Stage.Registered, caseId)
+      val outputFileTriangleMesh = dataProvider.triangleMeshFile(Stage.Registered, caseId)
+      MeshIO.writeMesh(registeredTriangleMesh, outputFileTriangleMesh).get
 
-      MeshIO.writeMesh(registeredMesh, outputFile).get
+      val outputFileTetrahedralMesh = dataProvider.tetrahedralMeshFile(Stage.Registered, caseId)
+      MeshIO.writeTetrahedralMesh(registeredTetrahedralMesh, outputFileTetrahedralMesh).get
+
       targetView.remove()
       pdmView.referenceView.remove()
       pdmView.shapeModelTransformationView.remove()
@@ -129,12 +143,13 @@ object NonrigidRegistration extends StrictLogging {
     scalismo.initialize()
     implicit val rng: Random = scalismo.utils.Random(42)
 
-    val pdmGp = dataProvider.gpModel.get
+    val pdmGp = dataProvider.gpModelTetrahedralMesh.get
     val referenceLandmarks = dataProvider.referenceLandmarks.get
 
     dataProvider.triangleMeshDir(Stage.Registered).mkdirs()
 
     for (caseId <- dataProvider.caseIds) {
+      logger.info(s"registration for case $caseId")
       registerCase(pdmGp, referenceLandmarks,dataProvider, caseId)
     } match {
       case Success(value) =>

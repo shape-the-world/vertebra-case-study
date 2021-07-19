@@ -5,21 +5,23 @@ import data.DataProvider
 import data.DataProvider.Stage
 import data.DataProvider.Vertebra.VertebraL1
 import scalismo.common.interpolation.{BSplineImageInterpolator3D, NearestNeighborInterpolator3D}
-import scalismo.geometry.{Landmark, Point3D, _3D}
+import scalismo.geometry.{_3D, Landmark, Point3D}
 import scalismo.image.DiscreteImageDomain
 import scalismo.io.{ImageIO, LandmarkIO, MeshIO}
 import scalismo.registration.LandmarkRegistration
 
 import scala.util.{Failure, Success, Try}
 
+/**
+ * Pipeline step to align the data using landmarks.
+ * All the individual data representations (labelmap, volume, triangle meshes, landmarks) are aligned.
+ */
 object AlignData extends StrictLogging {
 
   def processCase(referenceLandmarks: Seq[Landmark[_3D]],
                   referenceDomain: DiscreteImageDomain[_3D],
                   dataProvider: DataProvider,
-                  caseId: DataProvider.CaseId)
-                 (implicit rng : scalismo.utils.Random)
-  : Try[Unit] = {
+                  caseId: DataProvider.CaseId)(implicit rng: scalismo.utils.Random): Try[Unit] = {
     Try {
       val landmarks = dataProvider.landmarks(Stage.Initial, caseId).get
       val mesh = dataProvider.triangleMesh(Stage.Initial, caseId).get
@@ -69,7 +71,7 @@ object AlignData extends StrictLogging {
     for (caseId <- dataProvider.caseIds) {
       logger.info(s"working on case $caseId")
       processCase(referenceLandmarks, referenceDomain, dataProvider, caseId) match {
-        case Success(_)         => logger.info(s"successfully processed $caseId")
+        case Success(_) => logger.info(s"successfully processed $caseId")
         case Failure(exception) => {
           logger.error(s"an error occurred while processing $caseId: " + exception.getMessage)
         }
