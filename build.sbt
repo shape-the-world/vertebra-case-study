@@ -21,7 +21,7 @@ lazy val root = project
       "ch.qos.logback" % "logback-classic" % "1.2.3"
     ),
 
-    dependencyOverrides += ("ch.unibas.cs.gravis" %% "scalismo" % "develop-3834484ad9a99da8de1350ac7f9863c248b7ffab-SNAPSHOT"),
+    dependencyOverrides += ("ch.unibas.cs.gravis" %% "scalismo" % "develop-27bc91008f1ee51d52fd57130e49cdbe35c1c184-SNAPSHOT"),
 
     assemblyJarName in assembly := "vertebrae-registration.jar",
 

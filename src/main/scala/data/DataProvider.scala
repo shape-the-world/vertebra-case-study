@@ -5,7 +5,6 @@ import data.DataProvider.Vertebra.VertebraL1
 import data.DataProvider.{CaseId, Stage, Vertebra, readZippedImage}
 import scalismo.geometry.{Landmark, _3D}
 import scalismo.image.DiscreteImage
-import scalismo.io.intensitymodelio.IntensityModelIO
 import scalismo.io.{ImageIO, LandmarkIO, MeshIO, StatisticalModelIO}
 import scalismo.mesh.{TetrahedralMesh, TriangleMesh}
 import scalismo.statisticalmodel.{DiscreteLowRankGaussianProcess, PointDistributionModel}
@@ -149,8 +148,8 @@ class DataProvider(vertebra: Vertebra) {
 
   def intensityModelDir : File = new java.io.File(stageDir(Stage.Registered), "model")
   def intensityModelFile = new java.io.File(intensityModelDir, "intensity-model.h5")
-  def intensityModel : Try[DiscreteLowRankGaussianProcess[_3D, TetrahedralMesh, Short]] = {
-    IntensityModelIO.readScalarVolumeMeshModel(intensityModelFile)
+  def intensityModel : Try[DiscreteLowRankGaussianProcess[_3D, TetrahedralMesh, Float]] = {
+    StatisticalModelIO.readVolumeMeshIntensityModel3D(intensityModelFile)
   }
 
 }
