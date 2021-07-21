@@ -1,12 +1,14 @@
 package data
 
+import data.DataProvider.Stage.{Aligned, Initial, Registered}
 import data.DataProvider.Vertebra.VertebraL1
-import data.DataProvider.{readZippedImage, CaseId, Stage, Vertebra}
-import scalismo.geometry.{_3D, Landmark}
+import data.DataProvider.{CaseId, Stage, Vertebra, readZippedImage}
+import scalismo.geometry.{Landmark, _3D}
 import scalismo.image.DiscreteImage
+import scalismo.io.intensitymodelio.IntensityModelIO
 import scalismo.io.{ImageIO, LandmarkIO, MeshIO, StatisticalModelIO}
 import scalismo.mesh.{TetrahedralMesh, TriangleMesh}
-import scalismo.statisticalmodel.PointDistributionModel
+import scalismo.statisticalmodel.{DiscreteLowRankGaussianProcess, PointDistributionModel}
 
 import java.io.{BufferedInputStream, File, FileInputStream, FileOutputStream}
 import java.util.zip.GZIPInputStream
@@ -32,8 +34,7 @@ class DataProvider(vertebra: Vertebra) {
         CaseId("031"),
         CaseId("033"),
         CaseId("034"),
-        CaseId("056"),
-        CaseId("075"))
+        CaseId("056"))
 
   /**
    * The base directory, under which all the data is stored
@@ -146,6 +147,12 @@ class DataProvider(vertebra: Vertebra) {
     StatisticalModelIO.readStatisticalTriangleMeshModel3D(ssmFile)
   }
 
+  def intensityModelDir : File = new java.io.File(stageDir(Stage.Registered), "model")
+  def intensityModelFile = new java.io.File(intensityModelDir, "intensity-model.h5")
+  def intensityModel : Try[DiscreteLowRankGaussianProcess[_3D, TetrahedralMesh, Short]] = {
+    IntensityModelIO.readScalarVolumeMeshModel(intensityModelFile)
+  }
+
 }
 
 object DataProvider {
@@ -192,6 +199,21 @@ object DataProvider {
 
   /** Factory method used to create a new data provider */
   def of(vertebra: Vertebra): DataProvider = new DataProvider(vertebra)
+
+  def mkdirs(vertebra : Vertebra) : Unit = {
+    val dataProvider = DataProvider.of(vertebra)
+    dataProvider.referenceDir.mkdirs()
+    dataProvider.gpModelDir.mkdirs()
+    dataProvider.ssmDir.mkdirs()
+    dataProvider.intensityModelDir.mkdirs()
+
+    for (stage <- Seq(Initial, Aligned, Registered)) {
+      dataProvider.triangleMeshDir(stage).mkdirs()
+      dataProvider.tetrahedralMeshDir(stage).mkdirs()
+      dataProvider.landmarkDir(stage).mkdirs()
+      dataProvider.volumesDir(stage).mkdirs()
+    }
+  }
 
   /**
    * Helper method used to read a gzipped nii image.
