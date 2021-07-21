@@ -124,14 +124,13 @@ object NonrigidRegistration extends StrictLogging {
       val outputFileTetrahedralMesh = dataProvider.tetrahedralMeshFile(Stage.Registered, caseId)
       MeshIO.writeTetrahedralMesh(registeredTetrahedralMesh, outputFileTetrahedralMesh).get
 
-      targetView.remove()
-      pdmView.referenceView.remove()
-      pdmView.shapeModelTransformationView.remove()
     }
 
+
     // clean up the views
-    ui.filter(targetGroup, (_ : ObjectView) => true).foreach(_.remove())
-    ui.filter(modelGroup, (_ : ObjectView) => true).foreach(_.remove())
+    ui.filter(targetGroup, (_ : ObjectView) => true).foreach(view => Try{view.remove()})
+    ui.filter(modelGroup, (_ : ObjectView) => true).foreach(view => Try{view.remove()})
+
 
     successOfFailure
   }
