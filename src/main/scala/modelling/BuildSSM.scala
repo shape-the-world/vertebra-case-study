@@ -1,13 +1,14 @@
 package modelling
 
 import com.typesafe.scalalogging.StrictLogging
-import data.DataProvider
-import data.DataProvider.Stage
-import data.DataProvider.Vertebra.VertebraL1
-import scalismo.io.StatisticalModelIO
+import data.DataRepository.Stage
+import data.DataRepository.Vertebra.VertebraL1
+import data.DirectoryBasedDataRepository
 import scalismo.statisticalmodel.PointDistributionModel
 import scalismo.statisticalmodel.dataset.DataCollection
 import scalismo.ui.api.ScalismoUI
+
+import scala.util.{Failure, Success}
 
 /**
  * Builds a statistical shape model.
@@ -20,13 +21,11 @@ object BuildSSM extends StrictLogging {
 
     implicit val rng = scalismo.utils.Random(42)
 
-    val dataProvider = DataProvider.of(VertebraL1)
+    val dataRepository = DirectoryBasedDataRepository.of(VertebraL1)
 
-    dataProvider.ssmDir.mkdirs()
-
-    val refMesh = dataProvider.referenceTriangleMesh.get
-    val (successes, failures) = dataProvider.caseIds
-      .map(caseId => dataProvider.triangleMesh(Stage.Registered, caseId))
+    val refMesh = dataRepository.referenceTriangleMesh.get
+    val (successes, failures) = dataRepository.caseIds
+      .map(caseId => dataRepository.triangleMesh(Stage.Registered, caseId))
       .partition(_.isSuccess)
 
     failures.map(failure => failure.fold(fa => logger.error(fa.getMessage), _ => ()))
@@ -37,7 +36,10 @@ object BuildSSM extends StrictLogging {
 
     val ssm = PointDistributionModel.createUsingPCA(gpaAlignedDataCollection)
 
-    StatisticalModelIO.writeStatisticalTriangleMeshModel3D(ssm, dataProvider.ssmFile).get
+    dataRepository.saveSSM(ssm) match {
+      case Success(_) => logger.info("successfully saved ssm")
+      case Failure(exception) => logger.info("failed to save flie " + exception.getMessage)
+    }
 
     val ui = ScalismoUI()
     ui.show(ssm, "ssm")

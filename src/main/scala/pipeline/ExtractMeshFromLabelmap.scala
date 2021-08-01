@@ -1,12 +1,11 @@
 package pipeline
 
 import com.typesafe.scalalogging.StrictLogging
-import data.DataProvider
-import data.DataProvider.Vertebra.VertebraL1
-import data.DataProvider.{CaseId, Stage, Vertebra}
+import data.DataRepository.Vertebra.VertebraL1
+import data.DataRepository.{CaseId, Stage, Vertebra}
+import data.{DataRepository, DirectoryBasedDataRepository}
 import scalismo.geometry._3D
 import scalismo.image.DiscreteImage
-import scalismo.io.MeshIO
 import scalismo.mesh.TriangleMesh
 import scalismo.utils.{ImageConversion, MeshConversion}
 import vtk.{vtkMarchingCubes, vtkQuadricDecimation, vtkWindowedSincPolyDataFilter}
@@ -43,14 +42,12 @@ object ExtractMeshFromLabelmap extends StrictLogging {
     MeshConversion.vtkPolyDataToTriangleMesh(dec.GetOutput())
   }
 
-  def processCase(dataProvider: DataProvider, caseId: CaseId, vertebra: Vertebra): Try[Unit] = {
+  def processCase(dataRepository: DataRepository, caseId: CaseId, vertebra: Vertebra): Try[Unit] = {
     Try {
-      val labelmap = dataProvider.labelMap(Stage.Initial, caseId).get
+      val labelmap = dataRepository.labelMap(Stage.Initial, caseId).get
       val mesh = ExtractMeshFromLabelmap.extractTriangleMesh(labelmap, vertebra).get
 
-      val outputFile = dataProvider.triangleMeshFile(Stage.Initial, caseId)
-      outputFile.getParentFile.mkdirs()
-      MeshIO.writeMesh(mesh, outputFile).get
+      dataRepository.saveTriangleMesh(Stage.Initial, caseId, mesh).get
     }
   }
 
@@ -61,12 +58,12 @@ object ExtractMeshFromLabelmap extends StrictLogging {
     scalismo.initialize()
 
     val vertebra = VertebraL1
-    val dataProvider = DataProvider.of(vertebra)
+    val dataRepository = DirectoryBasedDataRepository.of(vertebra)
 
-    for (caseId <- dataProvider.caseIds) {
+    for (caseId <- dataRepository.caseIds) {
       logger.info(s"processing case $caseId")
 
-      processCase(dataProvider, caseId, vertebra) match {
+      processCase(dataRepository, caseId, vertebra) match {
         case Success(_)         => logger.info(s"successfully processed $caseId")
         case Failure(exception) => logger.error(s"an error occurred while processing $caseId: " + exception.getMessage)
       }

@@ -2,12 +2,11 @@ package pipeline
 
 import breeze.linalg.DenseVector
 import com.typesafe.scalalogging.StrictLogging
-import data.DataProvider
-import data.DataProvider.Stage
-import data.DataProvider.Vertebra.VertebraL1
+import data.DataRepository.Stage
+import data.DataRepository.Vertebra.VertebraL1
+import data.{DataRepository, DirectoryBasedDataRepository}
 import scalismo.common.interpolation.{BarycentricInterpolator3D, TriangleMeshInterpolator3D}
 import scalismo.geometry.{EuclideanVector, Landmark, _3D}
-import scalismo.io.MeshIO
 import scalismo.mesh.{MeshOperations, TetrahedralMesh, TriangleMesh, TriangleMesh3D}
 import scalismo.numerics.{FixedPointsUniformMeshSampler3D, LBFGSOptimizer}
 import scalismo.registration.{GaussianProcessTransformationSpace, L2Regularizer, MeanSquaresMetric, Registration}
@@ -77,14 +76,14 @@ object NonrigidRegistration extends StrictLogging {
 
   def registerCase(pdmGp: PointDistributionModel[_3D, TetrahedralMesh],
                    referenceLandmarks: Seq[Landmark[_3D]],
-                   dataProvider: DataProvider,
-                   caseId: DataProvider.CaseId)(implicit rng: scalismo.utils.Random): Try[Unit] = {
+                   dataRepository: DataRepository,
+                   caseId: DataRepository.CaseId)(implicit rng: scalismo.utils.Random): Try[Unit] = {
 
     val successOfFailure = Try {
 
-      val targetMesh = dataProvider.triangleMesh(Stage.Aligned, caseId).get
+      val targetMesh = dataRepository.triangleMesh(Stage.Aligned, caseId).get
       val targetView = ui.show(targetGroup, targetMesh, s"$caseId")
-      val targetLandmarks = dataProvider.landmarks(Stage.Aligned, caseId).get
+      val targetLandmarks = dataRepository.landmarks(Stage.Aligned, caseId).get
 
       val refIds = referenceLandmarks.map(lm => pdmGp.reference.pointSet.findClosestPoint(lm.point).id)
       val posteriorPDM = pdmGp.posterior(refIds.zip(targetLandmarks.map(_.point)).toIndexedSeq, sigma2 = 25.0)
@@ -118,11 +117,9 @@ object NonrigidRegistration extends StrictLogging {
       val registeredTriangleMesh = pdmGPOuterSurface.instance(finalCoefficients)
       val registeredTetrahedralMesh = posteriorPDM.instance(finalCoefficients)
 
-      val outputFileTriangleMesh = dataProvider.triangleMeshFile(Stage.Registered, caseId)
-      MeshIO.writeMesh(registeredTriangleMesh, outputFileTriangleMesh).get
+      dataRepository.saveTriangleMesh(Stage.Registered, caseId, registeredTriangleMesh).get
 
-      val outputFileTetrahedralMesh = dataProvider.tetrahedralMeshFile(Stage.Registered, caseId)
-      MeshIO.writeTetrahedralMesh(registeredTetrahedralMesh, outputFileTetrahedralMesh).get
+      dataRepository.saveTetrahedralMesh(Stage.Registered, caseId, registeredTetrahedralMesh).get
 
     }
 
@@ -137,24 +134,22 @@ object NonrigidRegistration extends StrictLogging {
 
   def main(args: Array[String]): Unit = {
 
-    val dataProvider = DataProvider.of(VertebraL1)
+    val dataRepository = DirectoryBasedDataRepository.of(VertebraL1)
 
     scalismo.initialize()
     implicit val rng: Random = scalismo.utils.Random(42)
 
-    val pdmGp = dataProvider.gpModelTetrahedralMesh.get
-    val referenceLandmarks = dataProvider.referenceLandmarks.get
+    val pdmGp = dataRepository.gpModelTetrahedralMesh.get
+    val referenceLandmarks = dataRepository.referenceLandmarks.get
 
-    dataProvider.triangleMeshDir(Stage.Registered).mkdirs()
-
-    for (caseId <- dataProvider.caseIds) {
+    for (caseId <- dataRepository.caseIds) {
       logger.info(s"registration for case $caseId")
-      registerCase(pdmGp, referenceLandmarks,dataProvider, caseId)
+      registerCase(pdmGp, referenceLandmarks,dataRepository, caseId)
     } match {
       case Success(value) =>
         logger.info(s"successfully registered case $caseId")
       case Failure(exception) =>
-        logger.error(s"error registereing $caseId " + exception.getMessage)
+        logger.error(s"error registering $caseId " + exception.getMessage)
     }
   }
 }

@@ -1,8 +1,9 @@
 package data
 
-import data.DataProvider.Stage.{Aligned, Initial, Registered}
-import data.DataProvider.Vertebra.VertebraL1
-import data.DataProvider.{CaseId, Stage, Vertebra, readZippedImage}
+import data.DataRepository.Stage.{Aligned, Initial, Registered}
+import data.DataRepository.Vertebra.VertebraL1
+import data.DataRepository.{CaseId, Stage, Vertebra}
+import data.DirectoryBasedDataRepository.readZippedImage
 import scalismo.geometry.{Landmark, _3D}
 import scalismo.image.DiscreteImage
 import scalismo.io.{ImageIO, LandmarkIO, MeshIO, StatisticalModelIO}
@@ -13,27 +14,16 @@ import java.io.{BufferedInputStream, File, FileInputStream, FileOutputStream}
 import java.util.zip.GZIPInputStream
 import scala.util.Try
 
-/**
- * This class is the primary interface to interact with the data. The basic principle is that
- * no code should ever construct a file path or read a file directly, but always go via the
- * DataProvider. This makes the pipeline code easy to change and at the same contains all the
- * information about data organization in one place.
- *
- * @param vertebra  Specify the verteba, whose data the data provider manages.
- */
-class DataProvider(vertebra: Vertebra) {
+class DirectoryBasedDataRepository(val vertebra : Vertebra) extends DataRepository {
 
-  /** Each data item is identified by a caseId. This sequence holds all CaseIds that are
-   * managed by this Data provider.
-   */
-  def caseIds: Seq[CaseId] =
+  override def caseIds: Seq[CaseId] =
     Seq(CaseId("004"),
-        CaseId("005"),
-        CaseId("008"),
-        CaseId("031"),
-        CaseId("033"),
-        CaseId("034"),
-        CaseId("056"))
+      CaseId("005"),
+      CaseId("008"),
+      CaseId("031"),
+      CaseId("033"),
+      CaseId("034"),
+      CaseId("056"))
 
   /**
    * The base directory, under which all the data is stored
@@ -55,27 +45,29 @@ class DataProvider(vertebra: Vertebra) {
   }
 
   /** The reference tetrahedral mesh is the mesh on which we base all the modelling. */
-  def referenceTetrahedralMesh: Try[TetrahedralMesh[_3D]] = MeshIO.readTetrahedralMesh(referenceTetrahedralMeshFile)
-
-  // We obtain the reference triangle mesh from the reference tetrahedral mesh.
-  def referenceTriangleMesh: Try[TriangleMesh[_3D]] = referenceTetrahedralMesh.map(_.operations.getOuterSurface)
+  override def referenceTetrahedralMesh: Try[TetrahedralMesh[_3D]] = MeshIO.readTetrahedralMesh(referenceTetrahedralMeshFile)
 
   def referenceLandmarksFile: File = new java.io.File(referenceDir, s"031.json")
 
-  def referenceLandmarks: Try[Seq[Landmark[_3D]]] = LandmarkIO.readLandmarksJson3D(referenceLandmarksFile)
+  override def referenceLandmarks: Try[Seq[Landmark[_3D]]] = LandmarkIO.readLandmarksJson3D(referenceLandmarksFile)
 
   def referenceVolumeFile: File = new java.io.File(referenceDir, s"031.nii.gz")
-  def referenceVolume: Try[DiscreteImage[_3D, Short]] = readZippedImage(referenceVolumeFile)
+  override def referenceVolume: Try[DiscreteImage[_3D, Short]] = readZippedImage(referenceVolumeFile)
+
   def referenceLabelmapFile: File = new java.io.File(referenceDir, s"031_seg.nii.gz")
-  def referenceLabelMap: Try[DiscreteImage[_3D, Short]] = readZippedImage(referenceVolumeFile)
+  override def referenceLabelMap: Try[DiscreteImage[_3D, Short]] = readZippedImage(referenceVolumeFile)
 
   def triangleMeshDir(stage: Stage): File = new java.io.File(stageDir(stage), "triangle-meshes")
 
   def triangleMeshFile(stage: Stage, caseId: CaseId): File = new File(triangleMeshDir(stage), s"${caseId.value}.ply")
 
-  def triangleMesh(stage: Stage, id: CaseId): Try[TriangleMesh[_3D]] = {
+  override def triangleMesh(stage: Stage, id: CaseId): Try[TriangleMesh[_3D]] = {
     val file = triangleMeshFile(stage, id)
     MeshIO.readMesh(file)
+  }
+
+  override def saveTriangleMesh(stage: Stage, id: CaseId, mesh: TriangleMesh[_3D]): Try[Unit] = {
+    MeshIO.writeMesh(mesh, triangleMeshFile(stage, id))
   }
 
   def tetrahedralMeshDir(stage: Stage): File = new java.io.File(stageDir(stage), "tetrahedral-meshes")
@@ -83,21 +75,33 @@ class DataProvider(vertebra: Vertebra) {
   def tetrahedralMeshFile(stage: Stage, caseId: CaseId): File =
     new File(tetrahedralMeshDir(stage), s"${caseId.value}.vtu")
 
-  def tetrahedralMesh(stage: Stage, id: CaseId): Try[TetrahedralMesh[_3D]] = {
+  override def tetrahedralMesh(stage: Stage, id: CaseId): Try[TetrahedralMesh[_3D]] = {
     val file = tetrahedralMeshFile(stage, id)
     MeshIO.readTetrahedralMesh(file)
+  }
+
+  override def saveTetrahedralMesh(stage: Stage, id: CaseId, mesh: TetrahedralMesh[_3D]): Try[Unit] = {
+    MeshIO.writeTetrahedralMesh(mesh, tetrahedralMeshFile(stage, id))
   }
 
   def landmarkDir(stage: Stage): File = new File(stageDir(stage), "landmarks")
 
   def landmarkFile(stage: Stage, caseId: CaseId): File = new File(landmarkDir(stage), s"${caseId.value}.json")
 
-  def landmarks(stage: Stage, id: CaseId): Try[Seq[Landmark[_3D]]] = {
+  override def landmarks(stage: Stage, id: CaseId): Try[Seq[Landmark[_3D]]] = {
     val file = landmarkFile(stage, id)
     LandmarkIO.readLandmarksJson3D(file)
   }
 
+  override def saveLandmarks(stage: Stage, id: CaseId, landmarks : Seq[Landmark[_3D]]): Try[Unit] = {
+    LandmarkIO.writeLandmarksJson[_3D](landmarks, landmarkFile(stage, id))
+  }
+
   def volumesDir(stage: Stage): File = new java.io.File(stageDir(stage), "volumes")
+
+  override def saveVolume(stage: Stage, id: CaseId, volume: DiscreteImage[_3D, Short]): Try[Unit] = {
+    ImageIO.writeNifti(volume, volumeFile(stage, id))
+  }
 
   def labelMapFile(stage: Stage, id: CaseId): File = {
     if (volumesDir(stage).listFiles().find(f => f.getPath.endsWith(s"${id.value}_seg.nii.gz")).isDefined)
@@ -106,13 +110,17 @@ class DataProvider(vertebra: Vertebra) {
       new java.io.File(volumesDir(stage), s"${id.value}_seg.nii")
   }
 
-  def labelMap(stage: Stage, id: CaseId): Try[DiscreteImage[_3D, Short]] = {
+  override def labelMap(stage: Stage, id: CaseId): Try[DiscreteImage[_3D, Short]] = {
     if (labelMapFile(stage, id).getPath.endsWith(".gz")) {
       readZippedImage(labelMapFile(stage, id))
     } else {
       ImageIO.read3DScalarImage[Short](labelMapFile(stage, id))
     }
 
+  }
+
+  override def saveLabelMap(stage: Stage, id: CaseId, labelMap: DiscreteImage[_3D, Short]): Try[Unit] = {
+    ImageIO.writeNifti(labelMap, labelMapFile(stage, id))
   }
 
   def volumeFile(stage: Stage, id: CaseId): File = {
@@ -122,7 +130,7 @@ class DataProvider(vertebra: Vertebra) {
       new java.io.File(volumesDir(stage), s"${id.value}.nii")
   }
 
-  def volume(stage: Stage, id: CaseId): Try[DiscreteImage[_3D, Short]] = {
+  override def volume(stage: Stage, id: CaseId): Try[DiscreteImage[_3D, Short]] = {
     if (volumeFile(stage, id).getPath.endsWith(".gz"))
       readZippedImage(volumeFile(stage, id))
     else
@@ -131,19 +139,31 @@ class DataProvider(vertebra: Vertebra) {
 
   def gpModelDir: File = new java.io.File(referenceDir, "model")
   def gpModelTriangleMeshFile: File = new java.io.File(gpModelDir, "gpmodel-trianglemesh.h5")
-  def gpModelTriangleMesh: Try[PointDistributionModel[_3D, TriangleMesh]] = {
+  override def gpModelTriangleMesh: Try[PointDistributionModel[_3D, TriangleMesh]] = {
     StatisticalModelIO.readStatisticalTriangleMeshModel3D(gpModelTriangleMeshFile)
   }
 
   def gpModelTetrahedralMeshFile: File = new java.io.File(gpModelDir, "gpmodel-tetrahedralmesh.h5")
-  def gpModelTetrahedralMesh: Try[PointDistributionModel[_3D, TetrahedralMesh]] = {
+  override def gpModelTetrahedralMesh: Try[PointDistributionModel[_3D, TetrahedralMesh]] = {
     StatisticalModelIO.readStatisticalTetrahedralMeshModel3D(gpModelTetrahedralMeshFile)
   }
 
   def ssmDir: File = new java.io.File(stageDir(Stage.Registered), "model")
   def ssmFile: File = new java.io.File(ssmDir, "ssm.h5")
-  def ssm: Try[PointDistributionModel[_3D, TriangleMesh]] = {
+  override def ssm: Try[PointDistributionModel[_3D, TriangleMesh]] = {
     StatisticalModelIO.readStatisticalTriangleMeshModel3D(ssmFile)
+  }
+
+  override def saveGpModelTriangleMesh(gpModel: PointDistributionModel[_3D, TriangleMesh]): Try[Unit] = {
+    StatisticalModelIO.writeStatisticalTriangleMeshModel3D(gpModel, gpModelTriangleMeshFile)
+  }
+
+  override def saveGpModelTetrahedralMesh(gpModel: PointDistributionModel[_3D, TetrahedralMesh]): Try[Unit] = {
+    StatisticalModelIO.writeStatisticalTetrahedralMeshModel3D(gpModel, gpModelTetrahedralMeshFile)
+  }
+
+  override def saveSSM(ssm: PointDistributionModel[_3D, TriangleMesh]): Try[Unit] = {
+    StatisticalModelIO.writeStatisticalTriangleMeshModel3D(ssm, ssmFile)
   }
 
   def intensityModelDir : File = new java.io.File(stageDir(Stage.Registered), "model")
@@ -152,65 +172,28 @@ class DataProvider(vertebra: Vertebra) {
     StatisticalModelIO.readVolumeMeshIntensityModel3D(intensityModelFile)
   }
 
+  override def saveIntensityModel(intensityModel: DiscreteLowRankGaussianProcess[_3D, TetrahedralMesh, Float]): Try[Unit] = {
+    StatisticalModelIO.writeVolumeMeshIntensityModel3D(intensityModel, intensityModelFile)
+  }
+
 }
 
-object DataProvider {
-
-  /**
-   * This trait is used to specify the individual vertebrae
-   */
-  sealed trait Vertebra {
-    def desc: String
-    def label: Int
-  }
-
-  object Vertebra {
-    case object VertebraL1 extends Vertebra {
-      override val desc = "L1"
-      override val label: Int = 23
-    }
-  }
-
-  /**
-   * An object is usually represented in different stages during the
-   * processing. It might start in its initial stage, is then aligned and finally registered.
-   * This trait, together with the accompanying case objects are used to represent this Stage.
-   */
-  sealed trait Stage {
-    def dirname: String
-  }
-  object Stage {
-    case object Initial extends Stage {
-      override val dirname = "initial"
-    }
-
-    case object Aligned extends Stage {
-      override val dirname = "aligned"
-    }
-
-    case object Registered extends Stage {
-      override val dirname = "registered"
-    }
-  }
-
-  /** Specifies an individual case   */
-  case class CaseId(value: String)
-
+object DirectoryBasedDataRepository {
   /** Factory method used to create a new data provider */
-  def of(vertebra: Vertebra): DataProvider = new DataProvider(vertebra)
+  def of(vertebra: Vertebra): DataRepository = new DirectoryBasedDataRepository(vertebra)
 
   def mkdirs(vertebra : Vertebra) : Unit = {
-    val dataProvider = DataProvider.of(vertebra)
-    dataProvider.referenceDir.mkdirs()
-    dataProvider.gpModelDir.mkdirs()
-    dataProvider.ssmDir.mkdirs()
-    dataProvider.intensityModelDir.mkdirs()
+    val dataRepository = new DirectoryBasedDataRepository(vertebra)
+    dataRepository.referenceDir.mkdirs()
+    dataRepository.gpModelDir.mkdirs()
+    dataRepository.ssmDir.mkdirs()
+    dataRepository.intensityModelDir.mkdirs()
 
     for (stage <- Seq(Initial, Aligned, Registered)) {
-      dataProvider.triangleMeshDir(stage).mkdirs()
-      dataProvider.tetrahedralMeshDir(stage).mkdirs()
-      dataProvider.landmarkDir(stage).mkdirs()
-      dataProvider.volumesDir(stage).mkdirs()
+      dataRepository.triangleMeshDir(stage).mkdirs()
+      dataRepository.tetrahedralMeshDir(stage).mkdirs()
+      dataRepository.landmarkDir(stage).mkdirs()
+      dataRepository.volumesDir(stage).mkdirs()
     }
   }
 
