@@ -17,18 +17,18 @@ import scala.util.Try
 class DirectoryBasedDataRepository(val vertebra : Vertebra) extends DataRepository {
 
   override def caseIds: Seq[CaseId] =
-    Seq(CaseId("004"),
-      CaseId("005"),
-      CaseId("008"),
-      CaseId("031"),
-      CaseId("033"),
-      CaseId("034"),
-      CaseId("056"))
+    Seq(CaseId("verse004"),
+      CaseId("verse005"),
+      CaseId("verse008"),
+      CaseId("verse031"),
+      CaseId("verse033"),
+      CaseId("verse034"),
+      CaseId("verse056"))
 
   /**
    * The base directory, under which all the data is stored
    */
-  def baseDir: File = new java.io.File(s"D:\\data\\vertebrae\\${vertebra.desc}")
+  def baseDir: File = new java.io.File(s"C:\\Users\\luetma00\\data\\vertebrae\\${vertebra.desc}")
 
   /**
    * Specifies the directory for a given stage.
@@ -41,7 +41,7 @@ class DirectoryBasedDataRepository(val vertebra : Vertebra) extends DataReposito
   def referenceDir: File = new java.io.File(baseDir, "reference")
 
   def referenceTetrahedralMeshFile: File = vertebra match {
-    case VertebraL1 => new java.io.File(referenceDir, s"031.vtu")
+    case VertebraL1 => new java.io.File(referenceDir, s"verse005-1600-nodes.vtu")
   }
 
   /** The reference tetrahedral mesh is the mesh on which we base all the modelling. */
@@ -51,7 +51,7 @@ class DirectoryBasedDataRepository(val vertebra : Vertebra) extends DataReposito
 
   override def referenceLandmarks: Try[Seq[Landmark[_3D]]] = LandmarkIO.readLandmarksJson3D(referenceLandmarksFile)
 
-  def referenceVolumeFile: File = new java.io.File(referenceDir, s"031.nii.gz")
+  def referenceVolumeFile: File = new java.io.File(referenceDir, s"verse005.nii.gz")
   override def referenceVolume: Try[DiscreteImage[_3D, Short]] = readZippedImage(referenceVolumeFile)
 
   def referenceLabelmapFile: File = new java.io.File(referenceDir, s"031_seg.nii.gz")
@@ -209,5 +209,7 @@ object DirectoryBasedDataRepository {
     os.close()
     ImageIO.read3DScalarImageAsType[Short](tmpFile)
   }
+
+
 
 }

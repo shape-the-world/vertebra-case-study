@@ -1,12 +1,14 @@
 package tools
 
-import data.{DataRepository, DirectoryBasedDataRepository}
 import data.DataRepository.Vertebra.VertebraL1
+import data.{DataRepository, DirectoryBasedDataRepository}
 import scalismo.ui.api.ScalismoUI
 
 object UIStarter extends App {
 
   val ui = ScalismoUI()
+
+
 
 
   val intensityModel = DirectoryBasedDataRepository.of(VertebraL1).intensityModel.get
