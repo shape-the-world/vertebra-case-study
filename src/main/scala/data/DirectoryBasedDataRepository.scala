@@ -2,9 +2,10 @@ package data
 
 import data.DataRepository.Stage.{Aligned, Initial, Registered}
 import data.DataRepository.Vertebra.VertebraL1
-import data.DataRepository.{CaseId, Stage, Vertebra}
+import data.DataRepository.{CaseId, ResolutionLevel, Stage, Vertebra}
 import data.DirectoryBasedDataRepository.readZippedImage
-import scalismo.geometry.{Landmark, _3D}
+import scalismo.common.Scalar
+import scalismo.geometry.{_3D, Landmark}
 import scalismo.image.DiscreteImage
 import scalismo.io.{ImageIO, LandmarkIO, MeshIO, StatisticalModelIO}
 import scalismo.mesh.{TetrahedralMesh, TriangleMesh}
@@ -14,16 +15,16 @@ import java.io.{BufferedInputStream, File, FileInputStream, FileOutputStream}
 import java.util.zip.GZIPInputStream
 import scala.util.Try
 
-class DirectoryBasedDataRepository(val vertebra : Vertebra) extends DataRepository {
+class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepository {
 
   override def caseIds: Seq[CaseId] =
     Seq(CaseId("verse004"),
-      CaseId("verse005"),
-      CaseId("verse008"),
-      CaseId("verse031"),
-      CaseId("verse033"),
-      CaseId("verse034"),
-      CaseId("verse056"))
+        CaseId("verse005"),
+        CaseId("verse008"),
+        CaseId("verse031"),
+        CaseId("verse033"),
+        CaseId("verse034"),
+        CaseId("verse056"))
 
   /**
    * The base directory, under which all the data is stored
@@ -40,22 +41,30 @@ class DirectoryBasedDataRepository(val vertebra : Vertebra) extends DataReposito
    */
   def referenceDir: File = new java.io.File(baseDir, "reference")
 
-  def referenceTetrahedralMeshFile: File = vertebra match {
-    case VertebraL1 => new java.io.File(referenceDir, s"verse005-1600-nodes.vtu")
+  def referenceTetrahedralMeshFile(level: ResolutionLevel): File = vertebra match {
+    case VertebraL1 =>
+      level match {
+        case ResolutionLevel.Coarse => new java.io.File(referenceDir, s"verse005-coarse-nodes.vtu")
+        case ResolutionLevel.Medium => new java.io.File(referenceDir, s"verse005-medium-nodes.vtu")
+        case ResolutionLevel.Fine   => new java.io.File(referenceDir, s"verse005-fine-nodes.vtu")
+      }
   }
 
   /** The reference tetrahedral mesh is the mesh on which we base all the modelling. */
-  override def referenceTetrahedralMesh: Try[TetrahedralMesh[_3D]] = MeshIO.readTetrahedralMesh(referenceTetrahedralMeshFile)
+  override def referenceTetrahedralMesh(level: ResolutionLevel): Try[TetrahedralMesh[_3D]] =
+    MeshIO.readTetrahedralMesh(referenceTetrahedralMeshFile(level))
 
   def referenceLandmarksFile: File = new java.io.File(referenceDir, s"031.json")
 
   override def referenceLandmarks: Try[Seq[Landmark[_3D]]] = LandmarkIO.readLandmarksJson3D(referenceLandmarksFile)
 
   def referenceVolumeFile: File = new java.io.File(referenceDir, s"verse005.nii.gz")
-  override def referenceVolume: Try[DiscreteImage[_3D, Short]] = readZippedImage(referenceVolumeFile)
+  override def referenceVolume: Try[DiscreteImage[_3D, Short]] =
+    readZippedImage(referenceVolumeFile, ImageIO.read3DScalarImage[Short])
 
   def referenceLabelmapFile: File = new java.io.File(referenceDir, s"031_seg.nii.gz")
-  override def referenceLabelMap: Try[DiscreteImage[_3D, Short]] = readZippedImage(referenceVolumeFile)
+  override def referenceLabelMap: Try[DiscreteImage[_3D, Short]] =
+    readZippedImage(referenceVolumeFile, ImageIO.read3DScalarImage[Short])
 
   def triangleMeshDir(stage: Stage): File = new java.io.File(stageDir(stage), "triangle-meshes")
 
@@ -93,7 +102,7 @@ class DirectoryBasedDataRepository(val vertebra : Vertebra) extends DataReposito
     LandmarkIO.readLandmarksJson3D(file)
   }
 
-  override def saveLandmarks(stage: Stage, id: CaseId, landmarks : Seq[Landmark[_3D]]): Try[Unit] = {
+  override def saveLandmarks(stage: Stage, id: CaseId, landmarks: Seq[Landmark[_3D]]): Try[Unit] = {
     LandmarkIO.writeLandmarksJson[_3D](landmarks, landmarkFile(stage, id))
   }
 
@@ -112,7 +121,7 @@ class DirectoryBasedDataRepository(val vertebra : Vertebra) extends DataReposito
 
   override def labelMap(stage: Stage, id: CaseId): Try[DiscreteImage[_3D, Short]] = {
     if (labelMapFile(stage, id).getPath.endsWith(".gz")) {
-      readZippedImage(labelMapFile(stage, id))
+      readZippedImage(labelMapFile(stage, id), ImageIO.read3DScalarImage[Short])
     } else {
       ImageIO.read3DScalarImage[Short](labelMapFile(stage, id))
     }
@@ -131,58 +140,93 @@ class DirectoryBasedDataRepository(val vertebra : Vertebra) extends DataReposito
   }
 
   override def volume(stage: Stage, id: CaseId): Try[DiscreteImage[_3D, Short]] = {
+    // we read the image as float, as some file seem to have intensity transformations. As we expect
+    // them to all be normal CT images, we convert them back to short
+    val reader = (file: java.io.File) => ImageIO.read3DScalarImageAsType[Float](file).map(image => image.map(_.toShort))
     if (volumeFile(stage, id).getPath.endsWith(".gz"))
-      readZippedImage(volumeFile(stage, id))
-    else
-      ImageIO.read3DScalarImage[Short](volumeFile(stage, id))
+      readZippedImage(volumeFile(stage, id), reader)
+    else {
+      reader(volumeFile(stage, id))
+    }
   }
 
   def gpModelDir: File = new java.io.File(referenceDir, "model")
-  def gpModelTriangleMeshFile: File = new java.io.File(gpModelDir, "gpmodel-trianglemesh.h5")
-  override def gpModelTriangleMesh: Try[PointDistributionModel[_3D, TriangleMesh]] = {
-    StatisticalModelIO.readStatisticalTriangleMeshModel3D(gpModelTriangleMeshFile)
+  def gpModelTriangleMeshFile(level: ResolutionLevel): File = {
+    level match {
+      case ResolutionLevel.Fine   => new java.io.File(gpModelDir, "gpmodel-trianglemesh-coarse.h5")
+      case ResolutionLevel.Medium => new java.io.File(gpModelDir, "gpmodel-trianglemesh-medium.h5")
+      case ResolutionLevel.Coarse => new java.io.File(gpModelDir, "gpmodel-trianglemesh-fine.h5")
+    }
+  }
+  override def gpModelTriangleMesh(level: ResolutionLevel): Try[PointDistributionModel[_3D, TriangleMesh]] = {
+    StatisticalModelIO.readStatisticalTriangleMeshModel3D(gpModelTriangleMeshFile(level))
   }
 
-  def gpModelTetrahedralMeshFile: File = new java.io.File(gpModelDir, "gpmodel-tetrahedralmesh.h5")
-  override def gpModelTetrahedralMesh: Try[PointDistributionModel[_3D, TetrahedralMesh]] = {
-    StatisticalModelIO.readStatisticalTetrahedralMeshModel3D(gpModelTetrahedralMeshFile)
+  def gpModelTetrahedralMeshFile(level: ResolutionLevel): File = {
+    level match {
+      case ResolutionLevel.Fine   => new java.io.File(gpModelDir, "gpmodel-tetrahedralmesh-coarse.h5")
+      case ResolutionLevel.Medium => new java.io.File(gpModelDir, "gpmodel-tetrahedralmesh-medium.h5")
+      case ResolutionLevel.Coarse => new java.io.File(gpModelDir, "gpmodel-tetrahedralmesh-fine.h5")
+    }
+  }
+  override def gpModelTetrahedralMesh(level: ResolutionLevel): Try[PointDistributionModel[_3D, TetrahedralMesh]] = {
+    StatisticalModelIO.readStatisticalTetrahedralMeshModel3D(gpModelTetrahedralMeshFile(level))
   }
 
   def ssmDir: File = new java.io.File(stageDir(Stage.Registered), "model")
-  def ssmFile: File = new java.io.File(ssmDir, "ssm.h5")
-  override def ssm: Try[PointDistributionModel[_3D, TriangleMesh]] = {
-    StatisticalModelIO.readStatisticalTriangleMeshModel3D(ssmFile)
+
+  def ssmFile(level: ResolutionLevel): File = {
+    level match {
+      case ResolutionLevel.Fine   => new java.io.File(gpModelDir, "ssm-coarse.h5")
+      case ResolutionLevel.Medium => new java.io.File(gpModelDir, "ssm-medium.h5")
+      case ResolutionLevel.Coarse => new java.io.File(gpModelDir, "ssm-fine.h5")
+    }
+  }
+  override def ssm(level: ResolutionLevel): Try[PointDistributionModel[_3D, TriangleMesh]] = {
+    StatisticalModelIO.readStatisticalTriangleMeshModel3D(ssmFile(level))
   }
 
-  override def saveGpModelTriangleMesh(gpModel: PointDistributionModel[_3D, TriangleMesh]): Try[Unit] = {
-    StatisticalModelIO.writeStatisticalTriangleMeshModel3D(gpModel, gpModelTriangleMeshFile)
+  override def saveGpModelTriangleMesh(gpModel: PointDistributionModel[_3D, TriangleMesh],
+                                       level: ResolutionLevel): Try[Unit] = {
+    StatisticalModelIO.writeStatisticalTriangleMeshModel3D(gpModel, gpModelTriangleMeshFile(level))
   }
 
-  override def saveGpModelTetrahedralMesh(gpModel: PointDistributionModel[_3D, TetrahedralMesh]): Try[Unit] = {
-    StatisticalModelIO.writeStatisticalTetrahedralMeshModel3D(gpModel, gpModelTetrahedralMeshFile)
+  override def saveGpModelTetrahedralMesh(gpModel: PointDistributionModel[_3D, TetrahedralMesh],
+                                          level: ResolutionLevel): Try[Unit] = {
+    StatisticalModelIO.writeStatisticalTetrahedralMeshModel3D(gpModel, gpModelTetrahedralMeshFile(level))
   }
 
-  override def saveSSM(ssm: PointDistributionModel[_3D, TriangleMesh]): Try[Unit] = {
-    StatisticalModelIO.writeStatisticalTriangleMeshModel3D(ssm, ssmFile)
+  override def saveSSM(ssm: PointDistributionModel[_3D, TriangleMesh], level: ResolutionLevel): Try[Unit] = {
+    StatisticalModelIO.writeStatisticalTriangleMeshModel3D(ssm, ssmFile(level))
   }
 
-  def intensityModelDir : File = new java.io.File(stageDir(Stage.Registered), "model")
-  def intensityModelFile = new java.io.File(intensityModelDir, "intensity-model.h5")
-  def intensityModel : Try[DiscreteLowRankGaussianProcess[_3D, TetrahedralMesh, Float]] = {
-    StatisticalModelIO.readVolumeMeshIntensityModel3D(intensityModelFile)
+  def intensityModelDir: File = new java.io.File(stageDir(Stage.Registered), "model")
+  def intensityModelFile(level: ResolutionLevel) = {
+    level match {
+      case ResolutionLevel.Fine   => new java.io.File(gpModelDir, "intensity-model-coarse.h5")
+      case ResolutionLevel.Medium => new java.io.File(gpModelDir, "intensity-model-medium.h5")
+      case ResolutionLevel.Coarse => new java.io.File(gpModelDir, "intensity-model-fine.h5")
+    }
+  }
+  def intensityModel(level: ResolutionLevel): Try[DiscreteLowRankGaussianProcess[_3D, TetrahedralMesh, Float]] = {
+    StatisticalModelIO.readVolumeMeshIntensityModel3D(intensityModelFile(level))
   }
 
-  override def saveIntensityModel(intensityModel: DiscreteLowRankGaussianProcess[_3D, TetrahedralMesh, Float]): Try[Unit] = {
-    StatisticalModelIO.writeVolumeMeshIntensityModel3D(intensityModel, intensityModelFile)
+  override def saveIntensityModel(
+    intensityModel: DiscreteLowRankGaussianProcess[_3D, TetrahedralMesh, Float],
+    level: ResolutionLevel
+  ): Try[Unit] = {
+    StatisticalModelIO.writeVolumeMeshIntensityModel3D(intensityModel, intensityModelFile(level))
   }
 
 }
 
 object DirectoryBasedDataRepository {
+
   /** Factory method used to create a new data provider */
   def of(vertebra: Vertebra): DataRepository = new DirectoryBasedDataRepository(vertebra)
 
-  def mkdirs(vertebra : Vertebra) : Unit = {
+  def mkdirs(vertebra: Vertebra): Unit = {
     val dataRepository = new DirectoryBasedDataRepository(vertebra)
     dataRepository.referenceDir.mkdirs()
     dataRepository.gpModelDir.mkdirs()
@@ -200,16 +244,19 @@ object DirectoryBasedDataRepository {
   /**
    * Helper method used to read a gzipped nii image.
    */
-  private def readZippedImage(gzippedImageFile: java.io.File): Try[DiscreteImage[_3D, Short]] = {
+  private def readZippedImage[S: Scalar](
+    gzippedImageFile: java.io.File,
+    imageReader: File => Try[DiscreteImage[_3D, S]]
+  ): Try[DiscreteImage[_3D, S]] = {
     val gis = new GZIPInputStream(new BufferedInputStream(new FileInputStream(gzippedImageFile)))
     val tmpFile = java.io.File.createTempFile("lbl", ".nii")
-    tmpFile.deleteOnExit()
     val os = new FileOutputStream(tmpFile)
     os.write(gis.readAllBytes())
     os.close()
-    ImageIO.read3DScalarImageAsType[Short](tmpFile)
+    val image = imageReader(tmpFile)
+
+    tmpFile.delete()
+    image
   }
-
-
 
 }

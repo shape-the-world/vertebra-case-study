@@ -1,7 +1,7 @@
 package data
 
-import data.DataRepository.{CaseId, Stage, Vertebra}
-import scalismo.geometry.{Landmark, _3D}
+import data.DataRepository.{CaseId, ResolutionLevel, Stage, Vertebra}
+import scalismo.geometry.{_3D, Landmark}
 import scalismo.image.DiscreteImage
 import scalismo.mesh.{TetrahedralMesh, TriangleMesh}
 import scalismo.statisticalmodel.{DiscreteLowRankGaussianProcess, PointDistributionModel}
@@ -28,10 +28,11 @@ trait DataRepository {
   def caseIds: Seq[CaseId]
 
   /** The reference tetrahedral mesh is the mesh on which we base all the modelling. */
-  def referenceTetrahedralMesh: Try[TetrahedralMesh[_3D]]
+  def referenceTetrahedralMesh(level: ResolutionLevel): Try[TetrahedralMesh[_3D]]
 
   // We obtain the reference triangle mesh from the reference tetrahedral mesh.
-  def referenceTriangleMesh: Try[TriangleMesh[_3D]] = referenceTetrahedralMesh.map(_.operations.getOuterSurface)
+  def referenceTriangleMesh(level: ResolutionLevel): Try[TriangleMesh[_3D]] =
+    referenceTetrahedralMesh(level).map(_.operations.getOuterSurface)
 
   def referenceLandmarks: Try[Seq[Landmark[_3D]]]
 
@@ -40,39 +41,41 @@ trait DataRepository {
 
   def triangleMesh(stage: Stage, id: CaseId): Try[TriangleMesh[_3D]]
 
-  def saveTriangleMesh(stage : Stage, id: CaseId, mesh : TriangleMesh[_3D]) : Try[Unit]
+  def saveTriangleMesh(stage: Stage, id: CaseId, mesh: TriangleMesh[_3D]): Try[Unit]
 
   def tetrahedralMesh(stage: Stage, id: CaseId): Try[TetrahedralMesh[_3D]]
 
-  def saveTetrahedralMesh(stage : Stage, id: CaseId, mesh : TetrahedralMesh[_3D]) : Try[Unit]
+  def saveTetrahedralMesh(stage: Stage, id: CaseId, mesh: TetrahedralMesh[_3D]): Try[Unit]
 
   def landmarks(stage: Stage, id: CaseId): Try[Seq[Landmark[_3D]]]
 
-  def saveLandmarks(stage: Stage, id: CaseId, landmarks : Seq[Landmark[_3D]]): Try[Unit]
+  def saveLandmarks(stage: Stage, id: CaseId, landmarks: Seq[Landmark[_3D]]): Try[Unit]
 
   def labelMap(stage: Stage, id: CaseId): Try[DiscreteImage[_3D, Short]]
 
-  def saveLabelMap(stage : Stage, id : CaseId, labelMap : DiscreteImage[_3D, Short]) : Try[Unit]
+  def saveLabelMap(stage: Stage, id: CaseId, labelMap: DiscreteImage[_3D, Short]): Try[Unit]
 
   def volume(stage: Stage, id: CaseId): Try[DiscreteImage[_3D, Short]]
 
-  def saveVolume(stage : Stage, id : CaseId, volume : DiscreteImage[_3D, Short]) : Try[Unit]
+  def saveVolume(stage: Stage, id: CaseId, volume: DiscreteImage[_3D, Short]): Try[Unit]
 
-  def gpModelTriangleMesh: Try[PointDistributionModel[_3D, TriangleMesh]]
+  def gpModelTriangleMesh(level: ResolutionLevel): Try[PointDistributionModel[_3D, TriangleMesh]]
 
-  def saveGpModelTriangleMesh(gpModel : PointDistributionModel[_3D, TriangleMesh]) : Try[Unit]
+  def saveGpModelTriangleMesh(gpModel: PointDistributionModel[_3D, TriangleMesh], level: ResolutionLevel): Try[Unit]
 
-  def gpModelTetrahedralMesh: Try[PointDistributionModel[_3D, TetrahedralMesh]]
+  def gpModelTetrahedralMesh(level: ResolutionLevel): Try[PointDistributionModel[_3D, TetrahedralMesh]]
 
-  def saveGpModelTetrahedralMesh(gpModel : PointDistributionModel[_3D, TetrahedralMesh]) : Try[Unit]
+  def saveGpModelTetrahedralMesh(gpModel: PointDistributionModel[_3D, TetrahedralMesh],
+                                 level: ResolutionLevel): Try[Unit]
 
-  def ssm: Try[PointDistributionModel[_3D, TriangleMesh]]
+  def ssm(level: ResolutionLevel): Try[PointDistributionModel[_3D, TriangleMesh]]
 
-  def saveSSM(ssm : PointDistributionModel[_3D, TriangleMesh]) : Try[Unit]
+  def saveSSM(ssm: PointDistributionModel[_3D, TriangleMesh], level: ResolutionLevel): Try[Unit]
 
-  def intensityModel : Try[DiscreteLowRankGaussianProcess[_3D, TetrahedralMesh, Float]]
+  def intensityModel(level: ResolutionLevel): Try[DiscreteLowRankGaussianProcess[_3D, TetrahedralMesh, Float]]
 
-  def saveIntensityModel(intensityModel : DiscreteLowRankGaussianProcess[_3D, TetrahedralMesh, Float]) : Try[Unit]
+  def saveIntensityModel(intensityModel: DiscreteLowRankGaussianProcess[_3D, TetrahedralMesh, Float],
+                         level: ResolutionLevel): Try[Unit]
 
 }
 
@@ -113,6 +116,13 @@ object DataRepository {
     case object Registered extends Stage {
       override val dirname = "registered"
     }
+  }
+
+  sealed trait ResolutionLevel
+  object ResolutionLevel {
+    case object Coarse extends ResolutionLevel
+    case object Medium extends ResolutionLevel
+    case object Fine extends ResolutionLevel
   }
 
   /** Specifies an individual case   */

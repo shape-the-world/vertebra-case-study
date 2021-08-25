@@ -1,10 +1,11 @@
 package modelling
 
 import com.typesafe.scalalogging.StrictLogging
+import data.DataRepository.ResolutionLevel
 import data.DataRepository.Vertebra.VertebraL1
 import data.DirectoryBasedDataRepository
 import scalismo.common.interpolation.BarycentricInterpolator3D
-import scalismo.geometry.{EuclideanVector, _3D}
+import scalismo.geometry.{_3D, EuclideanVector}
 import scalismo.kernels.{DiagonalKernel, GaussianKernel}
 import scalismo.statisticalmodel.{GaussianProcess, LowRankGaussianProcess, PointDistributionModel}
 
@@ -20,10 +21,11 @@ object BuildGPModel extends StrictLogging {
   def main(args: Array[String]): Unit = {
     scalismo.initialize()
 
+    val resolutionLevel = ResolutionLevel.Coarse
     val dataRepository = DirectoryBasedDataRepository.of(VertebraL1)
 
-    val referenceTetrahedralMesh = dataRepository.referenceTetrahedralMesh.get
-    val referenceTriangleMesh = dataRepository.referenceTriangleMesh.get
+    val referenceTetrahedralMesh = dataRepository.referenceTetrahedralMesh(resolutionLevel).get
+    val referenceTriangleMesh = dataRepository.referenceTriangleMesh(resolutionLevel).get
 
     val k = DiagonalKernel(GaussianKernel[_3D](40) * 10, 3) +
       DiagonalKernel(GaussianKernel[_3D](20) * 5, 3) +
@@ -37,18 +39,17 @@ object BuildGPModel extends StrictLogging {
                                                                  BarycentricInterpolator3D[EuclideanVector[_3D]]())
 
     val gpModelTetra = PointDistributionModel(referenceTetrahedralMesh, lowRankGP)
-    dataRepository.saveGpModelTetrahedralMesh(gpModelTetra) match {
+    dataRepository.saveGpModelTetrahedralMesh(gpModelTetra, resolutionLevel) match {
       case Success(_) => logger.info("Successfully saved tetrahedral mesh")
-      case Failure(exception) => logger.error("An error occurred while saving tetrahedral mesh: " + exception.getMessage)
+      case Failure(exception) =>
+        logger.error("An error occurred while saving tetrahedral mesh: " + exception.getMessage)
     }
 
     val gpModelTriangle = PointDistributionModel(referenceTriangleMesh, lowRankGP)
-    dataRepository.saveGpModelTriangleMesh(gpModelTriangle) match {
-      case Success(_) => logger.info("Successfully saved triangle mesh")
+    dataRepository.saveGpModelTriangleMesh(gpModelTriangle, resolutionLevel) match {
+      case Success(_)         => logger.info("Successfully saved triangle mesh")
       case Failure(exception) => logger.error("An error occurred while saving triangle mesh: " + exception.getMessage)
     }
-
-
 //    val ui = ScalismoUI()
 //    val tetraGroup = ui.createGroup("tetrahedralMeshModel")
 //    ui.show(tetraGroup, gpModelTetra, " model" )

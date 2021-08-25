@@ -1,5 +1,6 @@
 package rendering
 
+import data.DataRepository.ResolutionLevel
 import data.DataRepository.Vertebra.VertebraL1
 import data.DirectoryBasedDataRepository
 import scalismo.common.Field
@@ -13,11 +14,11 @@ import scalismo.utils.Benchmark
 
 import scala.collection.parallel.immutable.ParVector
 
-class DRR(val sensorDistance: Int,
-          val sensorWidth: Double,
-          val sensorHeight: Double,
-          resolution: IntVector[_2D],
-          samplingRate: Int) {
+class DRRRenderer(val sensorDistance: Int,
+                  val sensorWidth: Double,
+                  val sensorHeight: Double,
+                  resolution: IntVector[_2D],
+                  samplingRate: Int) {
 
   val sourcePointOnX = Point3D(-sensorDistance / 2, 0, 0)
   val sourcePointOnY = Point3D(0, -sensorDistance / 2, 0)
@@ -77,14 +78,15 @@ class DRR(val sensorDistance: Int,
 
 }
 
-object DRR {
+object DRRRenderer {
 
   def main(args: Array[String]): Unit = {
     scalismo.initialize()
+    val resolutionLevel = ResolutionLevel.Coarse
     val repo = DirectoryBasedDataRepository.of(VertebraL1) //.asInstanceOf[DirectoryBasedDataRepository]
-    val meshOrigPos = repo.referenceTetrahedralMesh.get
+    val meshOrigPos = repo.referenceTetrahedralMesh(resolutionLevel).get
 
-    val outerSurfaceOrigPos = repo.referenceTriangleMesh.get //meshOrigPos.operations.getOuterSurface
+    val outerSurfaceOrigPos = repo.referenceTriangleMesh(resolutionLevel).get //meshOrigPos.operations.getOuterSurface
     val centerOfMassOrigPos = (outerSurfaceOrigPos.pointSet.points.foldLeft(EuclideanVector3D(0, 0, 0))((acc, point) =>
       acc + point.toVector
     ) * (1.0 / outerSurfaceOrigPos.pointSet.numberOfPoints)).toPoint
@@ -101,7 +103,7 @@ object DRR {
     val volumeMesh = ScalarVolumeMeshField(mesh, ctValues.toIndexedSeq)
     val volumeMeshField = volumeMesh.interpolate(new BarycentricInterpolatorRestrictedToVolume3D())
 
-    val drr = new DRR(150, 200, 200, IntVector(128, 128), 200)
+    val drr = new DRRRenderer(150, 200, 200, IntVector(128, 128), 200)
     val sensorImageXY = Benchmark.benchmark(drr.projectXZ(volumeMeshField, 0), "projectionxz")
     val sensorImageYZ = Benchmark.benchmark(drr.projectYZ(volumeMeshField, 0), "projectionyz")
 

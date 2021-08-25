@@ -1,7 +1,7 @@
 package modelling
 
 import com.typesafe.scalalogging.StrictLogging
-import data.DataRepository.Stage
+import data.DataRepository.{ResolutionLevel, Stage}
 import data.DataRepository.Vertebra.VertebraL1
 import data.DirectoryBasedDataRepository
 import scalismo.statisticalmodel.PointDistributionModel
@@ -20,10 +20,11 @@ object BuildSSM extends StrictLogging {
     scalismo.initialize()
 
     implicit val rng = scalismo.utils.Random(42)
+    val resolutionLevel = ResolutionLevel.Coarse
 
     val dataRepository = DirectoryBasedDataRepository.of(VertebraL1)
 
-    val refMesh = dataRepository.referenceTriangleMesh.get
+    val refMesh = dataRepository.referenceTriangleMesh(resolutionLevel).get
     val (successes, failures) = dataRepository.caseIds
       .map(caseId => dataRepository.triangleMesh(Stage.Registered, caseId))
       .partition(_.isSuccess)
@@ -36,8 +37,8 @@ object BuildSSM extends StrictLogging {
 
     val ssm = PointDistributionModel.createUsingPCA(gpaAlignedDataCollection)
 
-    dataRepository.saveSSM(ssm) match {
-      case Success(_) => logger.info("successfully saved ssm")
+    dataRepository.saveSSM(ssm, resolutionLevel) match {
+      case Success(_)         => logger.info("successfully saved ssm")
       case Failure(exception) => logger.info("failed to save flie " + exception.getMessage)
     }
 

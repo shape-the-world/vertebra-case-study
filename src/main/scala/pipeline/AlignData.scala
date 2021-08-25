@@ -68,7 +68,6 @@ object AlignData extends StrictLogging {
           logger.error(s"an error occurred while processing $caseId: " + exception.getMessage)
         }
       }
-
     }
 
   }

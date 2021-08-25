@@ -1,5 +1,6 @@
 package tools
 
+import data.DataRepository.ResolutionLevel
 import data.DataRepository.Vertebra.VertebraL1
 import data.{DataRepository, DirectoryBasedDataRepository}
 import scalismo.ui.api.ScalismoUI
@@ -8,10 +9,9 @@ object UIStarter extends App {
 
   val ui = ScalismoUI()
 
+  val resolutionLevel = ResolutionLevel.Coarse
 
-
-
-  val intensityModel = DirectoryBasedDataRepository.of(VertebraL1).intensityModel.get
+  val intensityModel = DirectoryBasedDataRepository.of(VertebraL1).intensityModel(resolutionLevel).get
   implicit val rng = scalismo.utils.Random(42)
   val sampleGroup = ui.createGroup("samples")
 

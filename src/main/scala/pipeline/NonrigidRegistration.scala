@@ -2,11 +2,11 @@ package pipeline
 
 import breeze.linalg.DenseVector
 import com.typesafe.scalalogging.StrictLogging
-import data.DataRepository.Stage
+import data.DataRepository.{ResolutionLevel, Stage}
 import data.DataRepository.Vertebra.VertebraL1
 import data.{DataRepository, DirectoryBasedDataRepository}
 import scalismo.common.interpolation.{BarycentricInterpolator3D, TriangleMeshInterpolator3D}
-import scalismo.geometry.{EuclideanVector, Landmark, _3D}
+import scalismo.geometry.{_3D, EuclideanVector, Landmark}
 import scalismo.mesh.{MeshOperations, TetrahedralMesh, TriangleMesh, TriangleMesh3D}
 import scalismo.numerics.{FixedPointsUniformMeshSampler3D, LBFGSOptimizer}
 import scalismo.registration.{GaussianProcessTransformationSpace, L2Regularizer, MeanSquaresMetric, Registration}
@@ -89,11 +89,11 @@ object NonrigidRegistration extends StrictLogging {
       val posteriorPDM = pdmGp.posterior(refIds.zip(targetLandmarks.map(_.point)).toIndexedSeq, sigma2 = 25.0)
 
       // for the registration we restrict the pdm to the outer surface
-      val pdmGPOuterSurface = posteriorPDM.newReference(pdmGp.reference.operations.getOuterSurface, BarycentricInterpolator3D())
+      val pdmGPOuterSurface =
+        posteriorPDM.newReference(pdmGp.reference.operations.getOuterSurface, BarycentricInterpolator3D())
 
       val pdmView = ui.show(modelGroup, pdmGPOuterSurface, "gp")
       val gpView: ShapeModelTransformationView = pdmView.shapeModelTransformationView
-
 
       targetView.color = java.awt.Color.RED
       val registrationParameters = Seq(
@@ -107,7 +107,7 @@ object NonrigidRegistration extends StrictLogging {
 
       val finalCoefficients = registrationParameters.foldLeft(initialCoefficients)((modelCoefficients, regParameters) =>
         doRegistration(pdmGPOuterSurface.gp.interpolate(TriangleMeshInterpolator3D()),
-          pdmGPOuterSurface.reference,
+                       pdmGPOuterSurface.reference,
                        targetMesh,
                        regParameters,
                        modelCoefficients,
@@ -123,11 +123,9 @@ object NonrigidRegistration extends StrictLogging {
 
     }
 
-
     // clean up the views
-    ui.filter(targetGroup, (_ : ObjectView) => true).foreach(view => Try{view.remove()})
-    ui.filter(modelGroup, (_ : ObjectView) => true).foreach(view => Try{view.remove()})
-
+    ui.filter(targetGroup, (_: ObjectView) => true).foreach(view => Try { view.remove() })
+    ui.filter(modelGroup, (_: ObjectView) => true).foreach(view => Try { view.remove() })
 
     successOfFailure
   }
@@ -138,13 +136,13 @@ object NonrigidRegistration extends StrictLogging {
 
     scalismo.initialize()
     implicit val rng: Random = scalismo.utils.Random(42)
-
-    val pdmGp = dataRepository.gpModelTetrahedralMesh.get
+    val resolutionLevel = ResolutionLevel.Coarse
+    val pdmGp = dataRepository.gpModelTetrahedralMesh(resolutionLevel).get
     val referenceLandmarks = dataRepository.referenceLandmarks.get
 
     for (caseId <- dataRepository.caseIds) {
       logger.info(s"registration for case $caseId")
-      registerCase(pdmGp, referenceLandmarks,dataRepository, caseId)
+      registerCase(pdmGp, referenceLandmarks, dataRepository, caseId)
     } match {
       case Success(value) =>
         logger.info(s"successfully registered case $caseId")
