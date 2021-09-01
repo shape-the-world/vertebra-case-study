@@ -73,22 +73,38 @@ object IntensityFitting extends StrictLogging {
           initialParameters: IntensityFittingParameters,
           targetImageXZ: DiscreteImage[_3D, Float],
           targetImageYZ: DiscreteImage[_3D, Float],
+          numberOfSamples: Int,
           drrRenderer: DRRRenderer,
           statusCallback: (IntensitySample, Int) => Unit)(implicit rng: scalismo.utils.Random): IntensitySample = {
 
-    val intensityUpdateGenerator = MixtureProposal.fromProposalsWithTransition(
-      (1.0, IntensityGaussianUpdateProposal(model, 0.1, numCoefficientsToChange = 1))
+    val intensityUpdateGeneratorCoarse = MixtureProposal.fromProposalsWithTransition(
+      (0.5, IntensityGaussianUpdateProposal(model, 0.5, numCoefficientsToChange = 1)),
+      (0.5, IntensityGaussianUpdateProposal(model, 0.5, numCoefficientsToChange = 3))
     )
-    val samples =
+    val samplesCoarseFit =
       runFittingChain(model,
                       initialParameters,
                       targetImageXZ,
                       targetImageYZ,
                       drrRenderer,
-                      intensityUpdateGenerator,
-                      500,
+                      intensityUpdateGeneratorCoarse,
+                      100,
                       statusCallback)
-    val bestSample = samples.maxBy(_.logProb).sample
+    val bestSampleCoarseFit = samplesCoarseFit.maxBy(_.logProb).sample
+
+    val intensityUpdateGeneratorFinal = MixtureProposal.fromProposalsWithTransition(
+      (1.0, IntensityGaussianUpdateProposal(model, 0.1, numCoefficientsToChange = 3))
+    )
+    val samplesFinalFit =
+      runFittingChain(model,
+                      bestSampleCoarseFit.fittingParameters,
+                      targetImageXZ,
+                      targetImageYZ,
+                      drrRenderer,
+                      intensityUpdateGeneratorFinal,
+                      numberOfSamples,
+                      statusCallback)
+    val bestSample = samplesFinalFit.maxBy(_.logProb).sample
     bestSample
   }
 

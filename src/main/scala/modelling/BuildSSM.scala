@@ -26,7 +26,7 @@ object BuildSSM extends StrictLogging {
 
     val refMesh = dataRepository.referenceTriangleMesh(resolutionLevel).get
     val (successes, failures) = dataRepository.caseIds
-      .map(caseId => dataRepository.triangleMesh(Stage.Registered, caseId))
+      .map(caseId => dataRepository.triangleMesh(Stage.Registered(resolutionLevel), caseId))
       .partition(_.isSuccess)
 
     failures.map(failure => failure.fold(fa => logger.error(fa.getMessage), _ => ()))

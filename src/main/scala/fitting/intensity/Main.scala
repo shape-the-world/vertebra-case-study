@@ -1,5 +1,6 @@
 package fitting.intensity
 
+import bmd.BMDMeasurement
 import breeze.linalg.DenseVector
 import com.typesafe.scalalogging.StrictLogging
 import data.DataRepository.ResolutionLevel
@@ -11,6 +12,7 @@ import scalismo.geometry.{_3D, EuclideanVector3D, IntVector, Point3D}
 import scalismo.io.StatisticalModelIO
 import scalismo.mesh.{ScalarVolumeMeshField, TetrahedralMesh}
 import scalismo.statisticalmodel.DiscreteLowRankGaussianProcess
+import scalismo.transformations.Transformation3D
 import scalismo.ui.api.{ObjectView, ScalismoUI}
 
 import java.awt.Color
@@ -21,9 +23,11 @@ object Main extends StrictLogging {
   def main(args: Array[String]): Unit = {
     scalismo.initialize()
     implicit val rng = scalismo.utils.Random(42)
+
 //    val ui = ScalismoUI()
 
     val repo = DirectoryBasedDataRepository.of(VertebraL1)
+
     val intensityModelOrigPos = repo.intensityModel(ResolutionLevel.Coarse).get
 
     // We need to transform the model into the scanner
@@ -34,7 +38,8 @@ object Main extends StrictLogging {
       acc + point.toVector
     ) * (1.0 / outerSurface.pointSet.numberOfPoints)).toPoint
 
-    val domainInScanner = intensityModelOrigPos.domain.transform(pt => pt + (Point3D(0, 0, 0) - centerOfMass))
+    val scannerTransform = Transformation3D(pt => pt + (Point3D(0, 0, 0) - centerOfMass))
+    val domainInScanner = intensityModelOrigPos.domain.transform(scannerTransform)
     val intensityModel = DiscreteLowRankGaussianProcess[_3D, TetrahedralMesh, Float](domainInScanner,
                                                                                      intensityModelOrigPos.meanVector,
                                                                                      intensityModelOrigPos.variance,
@@ -44,7 +49,9 @@ object Main extends StrictLogging {
 
     // Generate ground truth - used for first synthetic experiments
     val groundTruthCoefficients = DenseVector.zeros[Double](intensityModel.rank)
-    groundTruthCoefficients(0) = 3
+    groundTruthCoefficients(0) = 2
+    groundTruthCoefficients(1) = 2
+    groundTruthCoefficients(2) = 2
     val groundTruthVolumeMesh = intensityModel
       .instance(groundTruthCoefficients)
       .interpolate(new BarycentricInterpolatorRestrictedToVolume3D[Float]())
@@ -54,7 +61,7 @@ object Main extends StrictLogging {
 
     val initialFittingParameters =
       IntensityFittingParameters(DenseVector.zeros[Double](intensityModel.rank))
-    initialFittingParameters.intensityModelCoefficients(0) = 2.5
+
     def fittingStatusCallback(sample: IntensitySample, iterationNumber: Int): Unit = {
 
       if (iterationNumber % 1 == 0) {
@@ -63,13 +70,38 @@ object Main extends StrictLogging {
       }
     }
 
-    val bestFit = IntensityFitting.fit(intensityModel,
-                                       initialFittingParameters,
-                                       targetImageXZ,
-                                       targetImageYZ,
-                                       drrRenderer,
-                                       fittingStatusCallback)
+    // ground truth bmd
 
+    val bestFitSample = IntensityFitting.fit(intensityModel,
+                                             initialFittingParameters,
+                                             targetImageXZ,
+                                             targetImageYZ,
+                                             numberOfSamples = 50,
+                                             drrRenderer,
+                                             fittingStatusCallback)
+
+    // ground truth bmd
+    val trabecularVolumeOrigPos = repo.referenceTrabecularVolume.get
+    val trabecularVolume = trabecularVolumeOrigPos.transform(scannerTransform)
+
+    val estimateGT = BMDMeasurement.estimateBMD(groundTruthVolumeMesh, trabecularVolume)
+    println("ground truth estimate " + estimateGT)
+
+    // bmd before fit
+    val initialVolumeMesh = intensityModel
+      .instance(initialFittingParameters.intensityModelCoefficients)
+      .interpolate(new BarycentricInterpolatorRestrictedToVolume3D[Float]())
+
+    val estimateInitial = BMDMeasurement.estimateBMD(initialVolumeMesh, trabecularVolume)
+    println("initial estimate " + estimateInitial)
+
+    // mbd after fit
+    val bestFitVolumeMesh = intensityModel
+      .instance(bestFitSample.fittingParameters.intensityModelCoefficients)
+      .interpolate(new BarycentricInterpolatorRestrictedToVolume3D[Float]())
+
+    val estimateBestFit = BMDMeasurement.estimateBMD(bestFitVolumeMesh, trabecularVolume)
+    println("fit estimate " + estimateBestFit)
   }
 
 }

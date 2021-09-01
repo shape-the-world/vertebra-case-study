@@ -77,6 +77,7 @@ object NonrigidRegistration extends StrictLogging {
   def registerCase(pdmGp: PointDistributionModel[_3D, TetrahedralMesh],
                    referenceLandmarks: Seq[Landmark[_3D]],
                    dataRepository: DataRepository,
+                   level: ResolutionLevel,
                    caseId: DataRepository.CaseId)(implicit rng: scalismo.utils.Random): Try[Unit] = {
 
     val successOfFailure = Try {
@@ -117,9 +118,9 @@ object NonrigidRegistration extends StrictLogging {
       val registeredTriangleMesh = pdmGPOuterSurface.instance(finalCoefficients)
       val registeredTetrahedralMesh = posteriorPDM.instance(finalCoefficients)
 
-      dataRepository.saveTriangleMesh(Stage.Registered, caseId, registeredTriangleMesh).get
+      dataRepository.saveTriangleMesh(Stage.Registered(level), caseId, registeredTriangleMesh).get
 
-      dataRepository.saveTetrahedralMesh(Stage.Registered, caseId, registeredTetrahedralMesh).get
+      dataRepository.saveTetrahedralMesh(Stage.Registered(level), caseId, registeredTetrahedralMesh).get
 
     }
 
@@ -132,17 +133,19 @@ object NonrigidRegistration extends StrictLogging {
 
   def main(args: Array[String]): Unit = {
 
+    val resolutionLevel = ResolutionLevel.Coarse
+
     val dataRepository = DirectoryBasedDataRepository.of(VertebraL1)
 
     scalismo.initialize()
     implicit val rng: Random = scalismo.utils.Random(42)
-    val resolutionLevel = ResolutionLevel.Coarse
+
     val pdmGp = dataRepository.gpModelTetrahedralMesh(resolutionLevel).get
     val referenceLandmarks = dataRepository.referenceLandmarks.get
 
     for (caseId <- dataRepository.caseIds) {
       logger.info(s"registration for case $caseId")
-      registerCase(pdmGp, referenceLandmarks, dataRepository, caseId)
+      registerCase(pdmGp, referenceLandmarks, dataRepository, resolutionLevel, caseId)
     } match {
       case Success(value) =>
         logger.info(s"successfully registered case $caseId")

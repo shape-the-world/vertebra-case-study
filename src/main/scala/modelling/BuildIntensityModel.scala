@@ -26,7 +26,7 @@ object BuildIntensityModel extends StrictLogging {
     val (successes, failures) = dataRepository.caseIds
       .map(caseId =>
         dataRepository
-          .tetrahedralMesh(Stage.Registered, caseId)
+          .tetrahedralMesh(Stage.Registered(resolutionLevel), caseId)
           .map(mesh => (mesh, caseId))
       )
       .partition(_.isSuccess)
@@ -45,7 +45,6 @@ object BuildIntensityModel extends StrictLogging {
     val dataCollection = DataCollection.fromScalarVolumeMesh3DSequence(scalarVolumeMeshFields)
     val intensityModel =
       DiscreteLowRankGaussianProcess.createUsingPCA(dataCollection, PivotedCholesky.RelativeTolerance(1e-10))
-
     logger.info("successfully built intensity model")
 
     dataRepository.saveIntensityModel(intensityModel, resolutionLevel) match {

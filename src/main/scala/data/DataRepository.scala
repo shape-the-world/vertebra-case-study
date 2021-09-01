@@ -38,6 +38,7 @@ trait DataRepository {
 
   def referenceVolume: Try[DiscreteImage[_3D, Short]]
   def referenceLabelMap: Try[DiscreteImage[_3D, Short]]
+  def referenceTrabecularVolume: Try[TetrahedralMesh[_3D]]
 
   def triangleMesh(stage: Stage, id: CaseId): Try[TriangleMesh[_3D]]
 
@@ -58,6 +59,10 @@ trait DataRepository {
   def volume(stage: Stage, id: CaseId): Try[DiscreteImage[_3D, Short]]
 
   def saveVolume(stage: Stage, id: CaseId, volume: DiscreteImage[_3D, Short]): Try[Unit]
+
+  def bmdVolume(stage: Stage, id: CaseId): Try[DiscreteImage[_3D, Short]]
+
+  def saveBmdVolume(stage: Stage, id: CaseId, volume: DiscreteImage[_3D, Short]): Try[Unit]
 
   def gpModelTriangleMesh(level: ResolutionLevel): Try[PointDistributionModel[_3D, TriangleMesh]]
 
@@ -113,8 +118,12 @@ object DataRepository {
       override val dirname = "aligned"
     }
 
-    case object Registered extends Stage {
-      override val dirname = "registered"
+    case class Registered(level: ResolutionLevel) extends Stage {
+      override val dirname = level match {
+        case ResolutionLevel.Coarse => "registered-coarse"
+        case ResolutionLevel.Medium => "registered-medium"
+        case ResolutionLevel.Fine   => "registered-fine"
+      }
     }
   }
 

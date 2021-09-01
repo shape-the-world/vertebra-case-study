@@ -18,13 +18,32 @@ import scala.util.Try
 class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepository {
 
   override def caseIds: Seq[CaseId] =
-    Seq(CaseId("verse004"),
-        CaseId("verse005"),
-        CaseId("verse008"),
-        CaseId("verse031"),
-        CaseId("verse033"),
-        CaseId("verse034"),
-        CaseId("verse056"))
+    Seq(
+      CaseId("verse005"),
+      CaseId("verse008"),
+      CaseId("verse033"),
+      CaseId("verse088"),
+      CaseId("verse096"),
+      CaseId("verse097"),
+      CaseId("verse104_CT-iso"),
+      CaseId("verse127"),
+      CaseId("verse254"),
+      CaseId("verse405_verse259_CT-sag"),
+      CaseId("verse406_verse261_CT-sag"),
+      CaseId("verse407_verse262_CT-sag"),
+      CaseId("verse415_verse275_CT-sag"),
+      //CaseId("verse506_CT-iso"),
+      CaseId("verse521"),
+      //CaseId("verse532"),
+      CaseId("verse537"),
+      //CaseId("verse541"),
+      //CaseId("verse557"),
+      //CaseId("verse561_CT-sag"),
+      CaseId("verse564_CT-iso"),
+      CaseId("verse565_CT-iso")
+      //CaseId("verse584"),
+      //CaseId("verse586_CT-iso")
+    )
 
   /**
    * The base directory, under which all the data is stored
@@ -65,6 +84,11 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
   def referenceLabelmapFile: File = new java.io.File(referenceDir, s"031_seg.nii.gz")
   override def referenceLabelMap: Try[DiscreteImage[_3D, Short]] =
     readZippedImage(referenceVolumeFile, ImageIO.read3DScalarImage[Short])
+
+  def referenceTrabecularAreaFile: File = new java.io.File(referenceDir, s"verse005TrabecularArea.vtu")
+  override def referenceTrabecularVolume: Try[TetrahedralMesh[_3D]] = {
+    MeshIO.readTetrahedralMesh(referenceTrabecularAreaFile)
+  }
 
   def triangleMeshDir(stage: Stage): File = new java.io.File(stageDir(stage), "triangle-meshes")
 
@@ -110,6 +134,26 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
 
   override def saveVolume(stage: Stage, id: CaseId, volume: DiscreteImage[_3D, Short]): Try[Unit] = {
     ImageIO.writeNifti(volume, volumeFile(stage, id))
+  }
+
+  def bmdVolumeFile(stage: Stage, id: CaseId): File = {
+    if (volumesDir(stage).listFiles().find(f => f.getPath.endsWith(s"${id.value}_bmd.nii.gz")).isDefined)
+      new java.io.File(volumesDir(stage), s"${id.value}_bmd.nii.gz")
+    else
+      new java.io.File(volumesDir(stage), s"${id.value}_bmd.nii")
+  }
+
+  override def bmdVolume(stage: Stage, id: CaseId): Try[DiscreteImage[_3D, Short]] = {
+    if (bmdVolumeFile(stage, id).getPath.endsWith(".gz")) {
+      readZippedImage(labelMapFile(stage, id), ImageIO.read3DScalarImage[Short])
+    } else {
+      ImageIO.read3DScalarImage[Short](labelMapFile(stage, id))
+    }
+
+  }
+
+  override def saveBmdVolume(stage: Stage, id: CaseId, volume: DiscreteImage[_3D, Short]): Try[Unit] = {
+    ImageIO.writeNifti(volume, bmdVolumeFile(stage, id))
   }
 
   def labelMapFile(stage: Stage, id: CaseId): File = {
@@ -173,13 +217,13 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
     StatisticalModelIO.readStatisticalTetrahedralMeshModel3D(gpModelTetrahedralMeshFile(level))
   }
 
-  def ssmDir: File = new java.io.File(stageDir(Stage.Registered), "model")
+  def ssmDir(level: ResolutionLevel): File = new java.io.File(stageDir(Stage.Registered(level)), "model")
 
   def ssmFile(level: ResolutionLevel): File = {
     level match {
-      case ResolutionLevel.Fine   => new java.io.File(gpModelDir, "ssm-coarse.h5")
-      case ResolutionLevel.Medium => new java.io.File(gpModelDir, "ssm-medium.h5")
-      case ResolutionLevel.Coarse => new java.io.File(gpModelDir, "ssm-fine.h5")
+      case ResolutionLevel.Fine   => new java.io.File(ssmDir(level), "ssm-coarse.h5")
+      case ResolutionLevel.Medium => new java.io.File(ssmDir(level), "ssm-medium.h5")
+      case ResolutionLevel.Coarse => new java.io.File(ssmDir(level), "ssm-fine.h5")
     }
   }
   override def ssm(level: ResolutionLevel): Try[PointDistributionModel[_3D, TriangleMesh]] = {
@@ -200,12 +244,12 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
     StatisticalModelIO.writeStatisticalTriangleMeshModel3D(ssm, ssmFile(level))
   }
 
-  def intensityModelDir: File = new java.io.File(stageDir(Stage.Registered), "model")
+  def intensityModelDir(level: ResolutionLevel): File = new java.io.File(stageDir(Stage.Registered(level)), "model")
   def intensityModelFile(level: ResolutionLevel) = {
     level match {
-      case ResolutionLevel.Fine   => new java.io.File(gpModelDir, "intensity-model-coarse.h5")
-      case ResolutionLevel.Medium => new java.io.File(gpModelDir, "intensity-model-medium.h5")
-      case ResolutionLevel.Coarse => new java.io.File(gpModelDir, "intensity-model-fine.h5")
+      case ResolutionLevel.Coarse => new java.io.File(intensityModelDir(level), "intensity-model-coarse.h5")
+      case ResolutionLevel.Medium => new java.io.File(intensityModelDir(level), "intensity-model-medium.h5")
+      case ResolutionLevel.Fine   => new java.io.File(intensityModelDir(level), "intensity-model-fine.h5")
     }
   }
   def intensityModel(level: ResolutionLevel): Try[DiscreteLowRankGaussianProcess[_3D, TetrahedralMesh, Float]] = {
@@ -230,14 +274,17 @@ object DirectoryBasedDataRepository {
     val dataRepository = new DirectoryBasedDataRepository(vertebra)
     dataRepository.referenceDir.mkdirs()
     dataRepository.gpModelDir.mkdirs()
-    dataRepository.ssmDir.mkdirs()
-    dataRepository.intensityModelDir.mkdirs()
 
-    for (stage <- Seq(Initial, Aligned, Registered)) {
-      dataRepository.triangleMeshDir(stage).mkdirs()
-      dataRepository.tetrahedralMeshDir(stage).mkdirs()
-      dataRepository.landmarkDir(stage).mkdirs()
-      dataRepository.volumesDir(stage).mkdirs()
+    for (level <- Seq(ResolutionLevel.Coarse, ResolutionLevel.Medium, ResolutionLevel.Fine)) {
+      dataRepository.ssmDir(level).mkdirs()
+      dataRepository.intensityModelDir(level).mkdirs()
+
+      for (stage <- Seq(Initial, Aligned, Registered(level))) {
+        dataRepository.triangleMeshDir(stage).mkdirs()
+        dataRepository.tetrahedralMeshDir(stage).mkdirs()
+        dataRepository.landmarkDir(stage).mkdirs()
+        dataRepository.volumesDir(stage).mkdirs()
+      }
     }
   }
 
