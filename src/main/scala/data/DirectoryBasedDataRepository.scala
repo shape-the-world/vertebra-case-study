@@ -197,9 +197,9 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
   def gpModelDir: File = new java.io.File(referenceDir, "model")
   def gpModelTriangleMeshFile(level: ResolutionLevel): File = {
     level match {
-      case ResolutionLevel.Fine   => new java.io.File(gpModelDir, "gpmodel-trianglemesh-coarse.h5")
+      case ResolutionLevel.Coarse => new java.io.File(gpModelDir, "gpmodel-trianglemesh-coarse.h5")
       case ResolutionLevel.Medium => new java.io.File(gpModelDir, "gpmodel-trianglemesh-medium.h5")
-      case ResolutionLevel.Coarse => new java.io.File(gpModelDir, "gpmodel-trianglemesh-fine.h5")
+      case ResolutionLevel.Fine   => new java.io.File(gpModelDir, "gpmodel-trianglemesh-fine.h5")
     }
   }
   override def gpModelTriangleMesh(level: ResolutionLevel): Try[PointDistributionModel[_3D, TriangleMesh]] = {
@@ -208,9 +208,9 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
 
   def gpModelTetrahedralMeshFile(level: ResolutionLevel): File = {
     level match {
-      case ResolutionLevel.Fine   => new java.io.File(gpModelDir, "gpmodel-tetrahedralmesh-coarse.h5")
+      case ResolutionLevel.Coarse => new java.io.File(gpModelDir, "gpmodel-tetrahedralmesh-coarse.h5")
       case ResolutionLevel.Medium => new java.io.File(gpModelDir, "gpmodel-tetrahedralmesh-medium.h5")
-      case ResolutionLevel.Coarse => new java.io.File(gpModelDir, "gpmodel-tetrahedralmesh-fine.h5")
+      case ResolutionLevel.Fine   => new java.io.File(gpModelDir, "gpmodel-tetrahedralmesh-fine.h5")
     }
   }
   override def gpModelTetrahedralMesh(level: ResolutionLevel): Try[PointDistributionModel[_3D, TetrahedralMesh]] = {
@@ -221,9 +221,9 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
 
   def ssmFile(level: ResolutionLevel): File = {
     level match {
-      case ResolutionLevel.Fine   => new java.io.File(ssmDir(level), "ssm-coarse.h5")
+      case ResolutionLevel.Coarse => new java.io.File(ssmDir(level), "ssm-coarse.h5")
       case ResolutionLevel.Medium => new java.io.File(ssmDir(level), "ssm-medium.h5")
-      case ResolutionLevel.Coarse => new java.io.File(ssmDir(level), "ssm-fine.h5")
+      case ResolutionLevel.Fine   => new java.io.File(ssmDir(level), "ssm-fine.h5")
     }
   }
   override def ssm(level: ResolutionLevel): Try[PointDistributionModel[_3D, TriangleMesh]] = {
