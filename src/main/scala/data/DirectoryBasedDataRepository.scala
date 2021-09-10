@@ -34,21 +34,33 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
       CaseId("verse415_verse275_CT-sag"),
       //CaseId("verse506_CT-iso"),
       CaseId("verse521"),
-      //CaseId("verse532"),
       CaseId("verse537"),
-      //CaseId("verse541"),
-      //CaseId("verse557"),
-      //CaseId("verse561_CT-sag"),
+      CaseId("verse541"),
+      CaseId("verse557"),
+      CaseId("verse561_CT-sag"),
       CaseId("verse564_CT-iso"),
-      CaseId("verse565_CT-iso")
-      //CaseId("verse584"),
-      //CaseId("verse586_CT-iso")
-    )
+      CaseId("verse565_CT-iso"),
+      CaseId("verse584"),
+      CaseId("verse586_CT-iso"),
+      CaseId("verse605_CT-sag"),
+      CaseId("verse619_CT-iso"),
+      CaseId("verse629_CT-iso"),
+      CaseId("verse631_CT-sag"),
+      CaseId("verse646_CT-iso"),
+      CaseId("verse807_CT-iso"),
+      CaseId("verse808_CT-iso"),
+      CaseId("verse811_CT-ax"),
+      CaseId("verse818_CT-iso"),
+      CaseId("verse820_CT-iso"),
+      CaseId("verse824_CT-iso"),
+      CaseId("verse825_CT-iso"),
+      CaseId("verse833_CT-ax")
+  )
 
   /**
    * The base directory, under which all the data is stored
    */
-  def baseDir: File = new java.io.File(s"C:\\Users\\luetma00\\data\\vertebrae\\${vertebra.desc}")
+  def baseDir: File = new java.io.File(s"F:\\verse_2019_data\\test_model_data\\${vertebra.desc}")
 
   /**
    * Specifies the directory for a given stage.
@@ -73,7 +85,7 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
   override def referenceTetrahedralMesh(level: ResolutionLevel): Try[TetrahedralMesh[_3D]] =
     MeshIO.readTetrahedralMesh(referenceTetrahedralMeshFile(level))
 
-  def referenceLandmarksFile: File = new java.io.File(referenceDir, s"031.json")
+  def referenceLandmarksFile: File = new java.io.File(referenceDir, s"verse005.json")
 
   override def referenceLandmarks: Try[Seq[Landmark[_3D]]] = LandmarkIO.readLandmarksJson3D(referenceLandmarksFile)
 
@@ -81,7 +93,7 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
   override def referenceVolume: Try[DiscreteImage[_3D, Short]] =
     readZippedImage(referenceVolumeFile, ImageIO.read3DScalarImage[Short])
 
-  def referenceLabelmapFile: File = new java.io.File(referenceDir, s"031_seg.nii.gz")
+  def referenceLabelmapFile: File = new java.io.File(referenceDir, s"verse005_seg.nii.gz")
   override def referenceLabelMap: Try[DiscreteImage[_3D, Short]] =
     readZippedImage(referenceVolumeFile, ImageIO.read3DScalarImage[Short])
 
@@ -165,9 +177,9 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
 
   override def labelMap(stage: Stage, id: CaseId): Try[DiscreteImage[_3D, Short]] = {
     if (labelMapFile(stage, id).getPath.endsWith(".gz")) {
-      readZippedImage(labelMapFile(stage, id), ImageIO.read3DScalarImage[Short])
+      readZippedImage(labelMapFile(stage, id), ImageIO.read3DScalarImageAsType[Short])
     } else {
-      ImageIO.read3DScalarImage[Short](labelMapFile(stage, id))
+      ImageIO.read3DScalarImageAsType[Short](labelMapFile(stage, id))
     }
 
   }
@@ -186,7 +198,7 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
   override def volume(stage: Stage, id: CaseId): Try[DiscreteImage[_3D, Short]] = {
     // we read the image as float, as some file seem to have intensity transformations. As we expect
     // them to all be normal CT images, we convert them back to short
-    val reader = (file: java.io.File) => ImageIO.read3DScalarImageAsType[Float](file).map(image => image.map(_.toShort))
+    val reader = (file: java.io.File) => ImageIO.read3DScalarImageAsType[Short](file)
     if (volumeFile(stage, id).getPath.endsWith(".gz"))
       readZippedImage(volumeFile(stage, id), reader)
     else {
@@ -197,9 +209,9 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
   def gpModelDir: File = new java.io.File(referenceDir, "model")
   def gpModelTriangleMeshFile(level: ResolutionLevel): File = {
     level match {
-      case ResolutionLevel.Coarse => new java.io.File(gpModelDir, "gpmodel-trianglemesh-coarse.h5")
+      case ResolutionLevel.Coarse   => new java.io.File(gpModelDir, "gpmodel-trianglemesh-coarse.h5")
       case ResolutionLevel.Medium => new java.io.File(gpModelDir, "gpmodel-trianglemesh-medium.h5")
-      case ResolutionLevel.Fine   => new java.io.File(gpModelDir, "gpmodel-trianglemesh-fine.h5")
+      case ResolutionLevel.Fine => new java.io.File(gpModelDir, "gpmodel-trianglemesh-fine.h5")
     }
   }
   override def gpModelTriangleMesh(level: ResolutionLevel): Try[PointDistributionModel[_3D, TriangleMesh]] = {
@@ -208,9 +220,9 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
 
   def gpModelTetrahedralMeshFile(level: ResolutionLevel): File = {
     level match {
-      case ResolutionLevel.Coarse => new java.io.File(gpModelDir, "gpmodel-tetrahedralmesh-coarse.h5")
+      case ResolutionLevel.Coarse  => new java.io.File(gpModelDir, "gpmodel-tetrahedralmesh-coarse.h5")
       case ResolutionLevel.Medium => new java.io.File(gpModelDir, "gpmodel-tetrahedralmesh-medium.h5")
-      case ResolutionLevel.Fine   => new java.io.File(gpModelDir, "gpmodel-tetrahedralmesh-fine.h5")
+      case ResolutionLevel.Fine => new java.io.File(gpModelDir, "gpmodel-tetrahedralmesh-fine.h5")
     }
   }
   override def gpModelTetrahedralMesh(level: ResolutionLevel): Try[PointDistributionModel[_3D, TetrahedralMesh]] = {
@@ -221,9 +233,9 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
 
   def ssmFile(level: ResolutionLevel): File = {
     level match {
-      case ResolutionLevel.Coarse => new java.io.File(ssmDir(level), "ssm-coarse.h5")
+      case ResolutionLevel.Coarse   => new java.io.File(ssmDir(level), "ssm-coarse.h5")
       case ResolutionLevel.Medium => new java.io.File(ssmDir(level), "ssm-medium.h5")
-      case ResolutionLevel.Fine   => new java.io.File(ssmDir(level), "ssm-fine.h5")
+      case ResolutionLevel.Fine => new java.io.File(ssmDir(level), "ssm-fine.h5")
     }
   }
   override def ssm(level: ResolutionLevel): Try[PointDistributionModel[_3D, TriangleMesh]] = {
