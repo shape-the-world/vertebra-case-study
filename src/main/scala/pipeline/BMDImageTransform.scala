@@ -11,7 +11,7 @@ import scalismo.image.{DiscreteImage, DiscreteImage3D, DiscreteImageDomain3D, St
 import scalismo.io.ImageIO
 import scalismo.numerics.GridSampler
 import scalismo.ui.api.ScalismoUI
-import tools.Debug.image
+
 
 import scala.util.{Failure, Success, Try}
 

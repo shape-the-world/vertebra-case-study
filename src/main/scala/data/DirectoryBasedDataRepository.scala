@@ -15,52 +15,21 @@ import java.io.{BufferedInputStream, File, FileInputStream, FileOutputStream}
 import java.util.zip.GZIPInputStream
 import scala.util.Try
 
+import com.typesafe.config.ConfigFactory
+import scala.jdk.CollectionConverters.CollectionHasAsScala
+
 class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepository {
 
-  override def caseIds: Seq[CaseId] =
-    Seq(
-      CaseId("verse005"),
-      CaseId("verse008"),
-      CaseId("verse033"),
-      CaseId("verse088"),
-      CaseId("verse096"),
-      CaseId("verse097"),
-      CaseId("verse104_CT-iso"),
-      CaseId("verse127"),
-      CaseId("verse254"),
-      CaseId("verse405_verse259_CT-sag"),
-      CaseId("verse406_verse261_CT-sag"),
-      CaseId("verse407_verse262_CT-sag"),
-      CaseId("verse415_verse275_CT-sag"),
-      //CaseId("verse506_CT-iso"),
-      CaseId("verse521"),
-      CaseId("verse537"),
-      CaseId("verse541"),
-      CaseId("verse557"),
-      CaseId("verse561_CT-sag"),
-      CaseId("verse564_CT-iso"),
-      CaseId("verse565_CT-iso"),
-      CaseId("verse584"),
-      CaseId("verse586_CT-iso"),
-      CaseId("verse605_CT-sag"),
-      CaseId("verse619_CT-iso"),
-      CaseId("verse629_CT-iso"),
-      CaseId("verse631_CT-sag"),
-      CaseId("verse646_CT-iso"),
-      CaseId("verse807_CT-iso"),
-      CaseId("verse808_CT-iso"),
-      CaseId("verse811_CT-ax"),
-      CaseId("verse818_CT-iso"),
-      CaseId("verse820_CT-iso"),
-      CaseId("verse824_CT-iso"),
-      CaseId("verse825_CT-iso"),
-      CaseId("verse833_CT-ax")
-  )
+
+  private val config = ConfigFactory.load();
+  private val dataDirectory = config.getString("data-directory")
+  override def caseIds = config.getStringList("case-ids").asScala.map(id => CaseId(id)).toSeq
+  private val referenceCaseId = config.getString("reference-case-id")
 
   /**
    * The base directory, under which all the data is stored
    */
-  def baseDir: File = new java.io.File(s"F:\\verse_2019_data\\test_model_data\\${vertebra.desc}")
+  def baseDir: File = new java.io.File(s"$dataDirectory/${vertebra.desc}")
 
   /**
    * Specifies the directory for a given stage.
@@ -75,9 +44,9 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
   def referenceTetrahedralMeshFile(level: ResolutionLevel): File = vertebra match {
     case VertebraL1 =>
       level match {
-        case ResolutionLevel.Coarse => new java.io.File(referenceDir, s"verse005-coarse-nodes.vtu")
-        case ResolutionLevel.Medium => new java.io.File(referenceDir, s"verse005-medium-nodes.vtu")
-        case ResolutionLevel.Fine   => new java.io.File(referenceDir, s"verse005-fine-nodes.vtu")
+        case ResolutionLevel.Coarse => new java.io.File(referenceDir, s"$referenceCaseId-coarse-nodes.vtu")
+        case ResolutionLevel.Medium => new java.io.File(referenceDir, s"$referenceCaseId-medium-nodes.vtu")
+        case ResolutionLevel.Fine   => new java.io.File(referenceDir, s"$referenceCaseId-fine-nodes.vtu")
       }
   }
 
@@ -85,19 +54,19 @@ class DirectoryBasedDataRepository(val vertebra: Vertebra) extends DataRepositor
   override def referenceTetrahedralMesh(level: ResolutionLevel): Try[TetrahedralMesh[_3D]] =
     MeshIO.readTetrahedralMesh(referenceTetrahedralMeshFile(level))
 
-  def referenceLandmarksFile: File = new java.io.File(referenceDir, s"verse005.json")
+  def referenceLandmarksFile: File = new java.io.File(referenceDir, s"$referenceCaseId.json")
 
   override def referenceLandmarks: Try[Seq[Landmark[_3D]]] = LandmarkIO.readLandmarksJson3D(referenceLandmarksFile)
 
-  def referenceVolumeFile: File = new java.io.File(referenceDir, s"verse005.nii.gz")
+  def referenceVolumeFile: File = new java.io.File(referenceDir, s"$referenceCaseId.nii.gz")
   override def referenceVolume: Try[DiscreteImage[_3D, Short]] =
     readZippedImage(referenceVolumeFile, ImageIO.read3DScalarImage[Short])
 
-  def referenceLabelmapFile: File = new java.io.File(referenceDir, s"verse005_seg.nii.gz")
+  def referenceLabelmapFile: File = new java.io.File(referenceDir, s"$referenceCaseId.nii.gz")
   override def referenceLabelMap: Try[DiscreteImage[_3D, Short]] =
     readZippedImage(referenceVolumeFile, ImageIO.read3DScalarImage[Short])
 
-  def referenceTrabecularAreaFile: File = new java.io.File(referenceDir, s"verse005TrabecularArea.vtu")
+  def referenceTrabecularAreaFile: File = new java.io.File(referenceDir, s"$referenceCaseId-TrabecularArea.vtu")
   override def referenceTrabecularVolume: Try[TetrahedralMesh[_3D]] = {
     MeshIO.readTetrahedralMesh(referenceTrabecularAreaFile)
   }
@@ -319,3 +288,5 @@ object DirectoryBasedDataRepository {
   }
 
 }
+
+

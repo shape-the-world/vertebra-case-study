@@ -113,5 +113,7 @@ object DRRRenderer {
     ui.show(volumeMesh, "mesh")
     ui.show(sensorImageXY, "drr-xy")
     ui.show(sensorImageYZ, "drr-yz")
+
+
   }
 }
